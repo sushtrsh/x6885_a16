@@ -1,0 +1,50 @@
+# Trustonic TEE bring-up for FBE decryption (Infinix X6885)
+# Derived from the stock vendor rc files (trustonic.rc, tee.rc, *keymint*.rc, *gatekeeper*.rc).
+# Services are 'disabled' and started explicitly; run as root because recovery has no app sandbox.
+
+on fs
+    mkdir /mnt/vendor 0755 root root
+    mkdir /mnt/vendor/persist 0771 system system
+    wait /dev/block/by-name/persist 5
+    mount ext4 /dev/block/by-name/persist /mnt/vendor/persist nosuid nodev noatime
+    mkdir /mnt/vendor/persist/mcRegistry 0771 system system
+    mkdir /mnt/vendor/persist/mcRegistry/tee_logs 0771 system system
+    mkdir /mnt/vendor/persist/keybox 0771 system system
+    start mobicore
+
+service mobicore /vendor/bin/mcDriverDaemon --P1 /mnt/vendor/persist/mcRegistry \
+    -r /vendor/app/mcRegistry/020f0000000000000000000000000000.drbin \
+    -r /vendor/app/mcRegistry/05120000000000000000000000000001.drbin \
+    -r /vendor/app/mcRegistry/05070000000000000000000000000000.drbin \
+    -r /vendor/app/mcRegistry/5020170115e016302017012521300000.drbin \
+    -r /vendor/app/mcRegistry/050d0000000000000000000000000000.drbin \
+    -r /vendor/app/mcRegistry/07210000000000000000000000000000.drbin \
+    -r /vendor/app/mcRegistry/40188311faf343488db888ad39496f9a.drbin
+    user root
+    group root system
+    disabled
+    seclabel u:r:recovery:s0
+
+service tee-service /vendor/bin/hw/vendor.trustonic.tee-service
+    user root
+    group root system
+    disabled
+    seclabel u:r:recovery:s0
+
+service vendor.keymint-trustonic /vendor/bin/hw/android.hardware.security.keymint@3.0-service.trustonic --rkp_version=v1
+    user root
+    group root system
+    disabled
+    seclabel u:r:recovery:s0
+
+service vendor.gatekeeper-default /vendor/bin/hw/android.hardware.gatekeeper-service.trustonic
+    user root
+    group root system
+    disabled
+    seclabel u:r:recovery:s0
+
+# Same trigger the stock device uses: the daemon sets this once mcOpenSession works
+on property:ro.vendor.trustonic.ready=true
+    start tee-service
+    start vendor.keymint-trustonic
+    start vendor.gatekeeper-default

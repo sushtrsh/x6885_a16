@@ -1,0 +1,11 @@
+# Infinix X6885 (MT6789) recovery init
+# Mirrors the USB setup of the stock recovery (init.recovery.mt6789.rc in vendor_boot).
+
+on init
+    setprop sys.usb.configfs 1
+    setprop sys.usb.controller "musb-hdrc"
+    setprop sys.usb.ffs.aio_compat 0
+
+on fs
+    # MTK musb: cmode 2 = data (SDP) mode, otherwise adb/MTP stay down
+    write /sys/class/udc/musb-hdrc/device/cmode 2
