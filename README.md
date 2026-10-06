@@ -13,31 +13,11 @@ Recovery-in-`vendor_boot` tree generated from the stock `vendor_boot.img`
 | Display | 1080x2400, density 420, `BGRA_8888` |
 | Encryption | FBE `aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized` + metadata encryption |
 
-## Build with carlodandan/OrangeFox-Action-Builder
-
-Push the **contents of this folder** to the root of your own GitHub repo, then run
-the *OrangeFox - Build* workflow with:
-
-| Input | Value |
-|---|---|
-| MANIFEST_BRANCH | `12.1` (**not** 11.0: boot header v4 needs 12.1) |
-| DEVICE_TREE | URL of your repo |
-| DEVICE_TREE_BRANCH | your branch (e.g. `main`) |
-| DEVICE_PATH | `device/infinix/X6885` (must match `DEVICE_PATH` in BoardConfig.mk) |
-| DEVICE_NAME | `X6885` |
-| BUILD_TARGET | `vendorboot` |
-
-The builder runs `lunch twrp_X6885-eng && mka adbd vendorbootimage`.
-Output: `out/target/product/X6885/OrangeFox*.img`.
-
-Before the first build set `OF_MAINTAINER` in `vendorsetup.sh` (OrangeFox variables are exported there, using fox_12.1 names).
 
 ## Flash (read all of it first)
 
 **Do NOT patch/flash vbmeta with `--disable-verity --disable-verification` and do NOT flash the raw
-image produced by the build.** Another X6885 tree (sushtrshhh/twrp_x6885) reports that this Transsion
-firmware ("P7 anti-crack") answers unsigned full images / patched vbmeta with a red "Unauthorized Repair"
-screen and a deliberate soft-brick. This is a single-source report and not verified here, but the downside
+image produced by the build. Transsion firmware ("P7 anti-crack") answers unsigned full images / patched vbmeta with a red "Unauthorized Repair" screen and a deliberate soft-brick, but the downside
 is a soft-brick, so the safe path below only replaces the *recovery* ramdisk fragment of the STOCK image.
 
 The stock `vendor_boot` has two ramdisk fragments: *platform* (used for normal Android boot, ~29.7 MB) and
