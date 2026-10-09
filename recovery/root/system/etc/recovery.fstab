@@ -1,0 +1,34 @@
+# Android fstab file.
+# The filesystem that contains the filesystem checker binary (typically /system) cannot
+# specify MF_CHECK, and must come before any filesystems that do specify MF_CHECK
+
+#<src>				<mnt_point>		<type>		<mnt_flags and options>															<fs_mgr_flags>
+# Logical partitions
+system				/system			auto		ro																	wait,slotselect,logical
+vendor				/vendor			auto		ro																	wait,slotselect,logical
+product				/product		auto		ro																	wait,slotselect,logical
+system_ext			/system_ext		auto		ro																	wait,slotselect,logical
+vendor_dlkm			/vendor_dlkm	auto		ro																	wait,slotselect,logical
+odm_dlkm			/odm_dlkm		auto		ro																	wait,slotselect,logical
+
+# Transsion partitions
+tr_carrier			/tr_carrier		auto		ro																	wait,slotselect,logical,nofail
+tr_company			/tr_company		auto		ro																	wait,slotselect,logical,nofail
+tr_mi				/tr_mi			auto		ro																	wait,slotselect,logical,nofail
+tr_overlayfs		/tr_overlayfs	auto		ro																	wait,slotselect,logical,nofail
+tr_preload			/tr_preload		auto		ro																	wait,slotselect,logical,nofail
+tr_product			/tr_product		auto		ro																	wait,slotselect,logical,nofail
+tr_region			/tr_region		auto		ro																	wait,slotselect,logical,nofail
+tr_theme			/tr_theme		auto		ro																	wait,slotselect,logical,nofail
+
+# Userdata partition
+/dev/block/by-name/metadata /metadata       ext4        noatime,nosuid,nodev,discard wait,check,formattable,first_stage_mount
+/dev/block/by-name/userdata /data           f2fs        noatime,nosuid,nodev,discard,noflush_merge,fsync_mode=nobarrier,reserve_root=134217,resgid=1065,inlinecrypt wait,check,formattable,quota,latemount,resize,reservedsize=128m,checkpoint=fs,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,keydirectory=/metadata/vold/metadata_encryption,fsverity
+
+# Need to have this entry in here even though the mount point itself is no longer needed.
+# The update_engine code looks for this entry in order to determine the boot device address
+# and fails if it does not find it.
+/dev/block/by-name/misc		/misc			emmc		defaults																defaults
+
+# Use tranfs as cache
+/dev/block/by-name/tranfs	/cache			ext4		noatime,nosuid,nodev,discard														wait,check,formattable

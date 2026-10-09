@@ -1,11 +1,106 @@
-# Infinix X6885 (MT6789) recovery init
-# Mirrors the USB setup of the stock recovery (init.recovery.mt6789.rc in vendor_boot).
+import /init.tee.rc
 
 on init
-    setprop sys.usb.configfs 1
-    setprop sys.usb.controller "musb-hdrc"
-    setprop sys.usb.ffs.aio_compat 0
+    restorecon /kmsg
+    restorecon_recursive /sys/devices/platform/soc/soc:mtk-leds
+    restorecon_recursive /sys/devices/platform/soc/soc:regulator-vibrator/leds/vibrator
+    restorecon /sys/devices/platform/soc/mt_usb/saving
+    # Generated mount fstab lives on writable recovery tmpfs.
+    symlink /tmp/fstab /etc/fstab
+    insmod /lib/modules/touch/adaptive-ts.ko
+    insmod /lib/modules/touch/focaltech_ft3683g.ko
+    insmod /lib/modules/touch/chipsemi_chsc5xxx_old.ko
+    export LD_LIBRARY_PATH /system/lib64:/vendor/lib64
+	setprop sys.usb.configfs 1
+	setprop sys.usb.controller "musb-hdrc"
+    setprop sys.usb.ffs.aio_compat 1
+	setprop crypto.ready 1
 
+	start vendor.boot-default
+	
 on fs
-    # MTK musb: cmode 2 = data (SDP) mode, otherwise adb/MTP stay down
-    write /sys/class/udc/musb-hdrc/device/cmode 2
+    wait /dev/block/platform/soc/11270000.ufshci
+    symlink /dev/block/platform/soc/11270000.ufshci /dev/block/bootdevice
+	install_keyring
+
+on property:persist.vendor.mtk.pl_lnk=1
+    symlink /dev/block/mapper/pl_a /dev/block/by-name/preloader_raw_a
+    symlink /dev/block/mapper/pl_b /dev/block/by-name/preloader_raw_b
+    symlink /dev/block/mapper/pl_a /dev/block/platform/bootdevice/by-name/preloader_raw_a
+    symlink /dev/block/mapper/pl_b /dev/block/platform/bootdevice/by-name/preloader_raw_b
+
+    symlink /dev/block/by-name/lk1 /dev/block/by-name/bootloader1
+    symlink /dev/block/by-name/lk2 /dev/block/by-name/bootloader2
+
+on property:vendor.mtk.boot0_linka=1
+    symlink /dev/block/sda /dev/block/mmcblk0boot0
+
+on property:vendor.mtk.boot0_linkb=1
+    symlink /dev/block/sdb /dev/block/mmcblk0boot0
+
+on property:vendor.mtk.boot0_linkc=1
+    symlink /dev/block/sdc /dev/block/mmcblk0boot0
+
+on property:vendor.mtk.boot1_linka=1
+    symlink /dev/block/sda /dev/block/mmcblk0boot1
+
+on property:vendor.mtk.boot1_linkb=1
+    symlink /dev/block/sdb /dev/block/mmcblk0boot1
+
+on property:vendor.mtk.boot1_linkc=1
+    symlink /dev/block/sdc /dev/block/mmcblk0boot1
+
+on property:ro.crypto.state=encrypted && property:ro.boot.dynamic_partitions=true
+	start mobicore
+
+on property:ro.vendor.trustonic.ready=true
+    start vendor.gatekeeper-default
+    start vendor.keymint-trustonic
+
+on property:servicemanager.ready=true
+    setprop sys.boot_completed 1
+
+# Gatekeeper
+service vendor.gatekeeper-default /vendor/bin/hw/android.hardware.gatekeeper-service.trustonic
+	class early_hal
+    interface android.hardware.gatekeeper@1.0::IGatekeeper default
+    user system
+    group system
+    seclabel u:r:hal_gatekeeper_default:s0
+
+# Keymint
+service vendor.keymint-trustonic /vendor/bin/hw/android.hardware.security.keymint@3.0-service.trustonic --rkp_version=v1
+    class early_hal
+	interface android.hardware.keymaster@4.0::IKeymasterDevice default
+    interface android.hardware.keymaster@4.1::IKeymasterDevice default
+    user system
+	group system
+    seclabel u:r:hal_keymint_default:s0
+
+# MTK AIDL Boot HAL
+service vendor.boot-default /system/bin/hw/android.hardware.boot-service.mtk
+    class early_hal
+    user root
+    group root
+    interface aidl android.hardware.boot.IBootControl/default
+    seclabel u:r:hal_bootctl_default:s0
+
+# Override Health HAL service definition.
+service vendor.health-default /system/bin/hw/android.hardware.health-service.example_recovery
+    class hal
+    user root
+    group root
+    capabilities WAKE_ALARM BLOCK_SUSPEND
+    file /dev/kmsg w
+    seclabel u:r:hal_health_default:s0
+    override
+
+# Override keystore2 service definition.	
+service keystore2 /system/bin/keystore2 /tmp/misc/keystore
+    class early_hal
+	interface aidl android.system.keystore2.IKeystoreService/default
+    user root
+    group root keystore readproc log
+    writepid /dev/cpuset/foreground/tasks
+    seclabel u:r:keystore:s0
+	override

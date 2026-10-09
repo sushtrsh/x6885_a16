@@ -1,0 +1,209 @@
+type mtk_recovery_tee, domain;
+type mtk_recovery_proc_bootprof, fs_type, proc_type;
+type mtk_recovery_proc_partitions, fs_type, proc_type;
+type mtk_recovery_fstab_file, file_type;
+type mtk_recovery_task_profiles_file, file_type;
+type mtk_recovery_cgroup_desc_file, file_type;
+type mtk_recovery_apex_dir, file_type;
+type mtk_recovery_bootstrap, file_type;
+type mtk_recovery_tranlog_device, dev_type;
+type mtk_recovery_sysfs_control, fs_type, sysfs_type;
+type mtk_recovery_ufs_boot_device, dev_type;
+type mtk_recovery_gatekeeper_state_file, file_type;
+
+# MT6789 Android 16 custom recovery. Android's normal-boot policy is unchanged.
+# Rules are evaluated only for the source-built recovery policy.
+recovery_only(`
+  typeattribute mtk_recovery_tee coredomain;
+  typeattribute recovery mlstrustedsubject;
+
+  # Recovery ramdisk executables/libraries retain the rootfs label. Give each
+  # daemon its own enforcing process domain without relabeling Android partitions.
+  # logd is dynamically linked too: entrypoint alone cannot map its rootfs libraries.
+  allow { logd servicemanager hwservicemanager vndservicemanager keystore
+          hal_gatekeeper_default hal_keymint_default hal_bootctl_default
+          hal_health_default mtk_recovery_tee } rootfs:file { r_file_perms execute entrypoint };
+  allow { logd servicemanager hwservicemanager vndservicemanager keystore
+          hal_gatekeeper_default hal_keymint_default hal_bootctl_default
+          hal_health_default mtk_recovery_tee } rootfs:dir r_dir_perms;
+  allow { logd servicemanager hwservicemanager vndservicemanager keystore
+          hal_gatekeeper_default hal_keymint_default hal_bootctl_default
+          hal_health_default mtk_recovery_tee } tmpfs:dir search;
+  domain_trans(init, rootfs, mtk_recovery_tee)
+  # The stock mobicore node is 0600 system:system; the daemon runs as root.
+  allow mtk_recovery_tee self:global_capability_class_set { dac_override dac_read_search };
+  allow mtk_recovery_tee tee_device:chr_file rw_file_perms;
+  allow mtk_recovery_tee mtk_recovery_tranlog_device:chr_file rw_file_perms;
+  allow { hal_gatekeeper_default hal_keymint_default } mnt_vendor_file:dir search;
+  # Only the recovery-created mcRegistry state directory; Android persist is not relabeled.
+  allow { hal_gatekeeper_default mtk_recovery_tee } mtk_recovery_gatekeeper_state_file:dir create_dir_perms;
+  allow { hal_gatekeeper_default mtk_recovery_tee } mtk_recovery_gatekeeper_state_file:file create_file_perms;
+  allowxperm { mtk_recovery_tee hal_gatekeeper_default hal_keymint_default } tee_device:chr_file ioctl { 0x4d00-0x4dff };
+  allow mtk_recovery_tee vendor_file:dir r_dir_perms;
+  allow mtk_recovery_tee vendor_file:file r_file_perms;
+  allow mtk_recovery_tee mnt_vendor_file:dir create_dir_perms;
+  allow mtk_recovery_tee mnt_vendor_file:file create_file_perms;
+  allow mtk_recovery_tee vendor_data_file:dir create_dir_perms;
+  allow mtk_recovery_tee vendor_data_file:file create_file_perms;
+  allow mtk_recovery_tee unlabeled:dir create_dir_perms;
+  allow mtk_recovery_tee unlabeled:file create_file_perms;
+  set_prop(mtk_recovery_tee, vendor_default_prop)
+  get_prop(mtk_recovery_tee, default_prop)
+  get_prop(mtk_recovery_tee, bootloader_prop)
+  get_prop(mtk_recovery_tee, vendor_default_prop)
+  allow { hal_gatekeeper_default hal_keymint_default } tee_device:chr_file map;
+
+  # Vendor battery nodes also appear under MTK-specific sysfs paths.
+  r_dir_file(hal_health_default, sysfs)
+
+  # AIDL/HIDL services and keystore run in their standard domains.
+  binder_use(recovery)
+  hwbinder_use(recovery)
+  hal_client_domain(recovery, hal_gatekeeper)
+  hal_client_domain(recovery, hal_keymint)
+  hal_client_domain(recovery, hal_keymaster)
+  binder_call(recovery, keystore)
+  allow recovery { keystore_service authorization_service
+                   keystore_compat_hal_service }:service_manager find;
+  allow recovery keystore:keystore2 add_auth;
+  allow recovery vold_key:keystore2_key { use manage_blob };
+  allow recovery locksettings_key:keystore2_key { use get_info req_forced_op };
+  allow keystore recovery:binder transfer;
+  allow keystore recovery:fd use;
+  allow keystore tmpfs:dir create_dir_perms;
+  allow keystore tmpfs:file create_file_perms;
+  get_prop(keystore, build_prop)
+  get_prop(keystore, default_prop)
+  get_prop(keystore, hwservicemanager_prop)
+
+  # UI, tools and ADB root share the explicitly authorized recovery domain.
+  # Do not use the debug su domain as a permissive escape hatch.
+  allow adbd recovery:process dyntransition;
+  allow recovery adbd:fd use;
+  # adbd keeps its init-created authentication socket after changing to
+  # the recovery root domain. libadbd_auth aborts if listen/accept is denied.
+  allow recovery adbd:unix_stream_socket { read write getattr getopt shutdown listen accept };
+  allow recovery shell_exec:file { execute execute_no_trans r_file_perms };
+  allow recovery self:process { setexec execmem };
+  allow recovery self:global_capability_class_set { fsetid sys_rawio };
+  allow recovery self:netlink_kobject_uevent_socket create_socket_perms_no_ioctl;
+  allow recovery proc_filesystems:file r_file_perms;
+  allow recovery proc_version:file r_file_perms;
+  # Process/service inspection and boot evidence from actual denied reads.
+  r_dir_file(recovery, domain)
+  allow recovery domain:process getattr;
+  allow recovery { proc_modules proc_pid_max proc_uptime proc_stat mtk_recovery_proc_partitions }:file r_file_perms;
+  allow recovery init_exec:file getattr;
+  allow recovery properties_device:dir r_dir_perms;
+  allow recovery apex_mnt_dir:dir r_dir_perms;
+  # Recovery installer scratch mountpoint; no apexd is started here.
+  allow recovery mtk_recovery_apex_dir:dir { create_dir_perms mounton };
+  allow init mtk_recovery_apex_dir:dir mounton;
+  allow domain mtk_recovery_apex_dir:dir { getattr search };
+  allow recovery loop_control_device:chr_file rw_file_perms;
+  allowxperm recovery loop_control_device:chr_file ioctl LOOP_CTL_GET_FREE;
+  allow recovery random_device:chr_file mounton;
+  allow recovery self:dir write;
+  # The /etc tmpfs copy is relabeled before logd and the boot HAL start.
+  allow init tmpfs:file relabelfrom;
+  allow init rootfs:chr_file { getattr relabelfrom };
+  # Match AOSP task-profile read access, using a label for the RAM copy.
+  allow domain mtk_recovery_task_profiles_file:file r_file_perms;
+  allow init mtk_recovery_cgroup_desc_file:file r_file_perms;
+  # Writable /etc fstab has its own label; boot HAL does not read arbitrary tmpfs.
+  allow hal_bootctl_default mtk_recovery_fstab_file:file r_file_perms;
+  allow recovery mtk_recovery_fstab_file:file create_file_perms;
+  allow recovery mtk_recovery_fstab_file:lnk_file r_file_perms;
+  allow init mtk_recovery_fstab_file:lnk_file create_file_perms;
+  allowxperm recovery functionfs:file ioctl { 0x6781 };
+  r_dir_file(recovery, pstorefs)
+  allow recovery linkerconfig_file:dir r_dir_perms;
+  get_prop(recovery, device_logging_prop)
+  allow recovery kernel:system module_request;
+  allow recovery kmsg_device:chr_file r_file_perms;
+  allow recovery sysfs:dir r_dir_perms;
+  allow recovery sysfs:file r_file_perms;
+  allow recovery sysfs:lnk_file r_file_perms;
+  allow recovery selinuxfs:dir r_dir_perms;
+  # Read the live kernel policy to verify zero permissive domains.
+  allow recovery kernel:security read_policy;
+  allow recovery rootfs:dir create_dir_perms;
+  allow recovery rootfs:lnk_file create_file_perms;
+  allow recovery rootfs:fifo_file create_file_perms;
+  allow recovery tmpfs:fifo_file create_file_perms;
+  allow recovery tmpfs:lnk_file create_file_perms;
+  allow recovery block_device:dir rw_dir_perms;
+  allow recovery block_device:lnk_file create_file_perms;
+  allow recovery fscklogs:dir create_dir_perms;
+  allow recovery fscklogs:file create_file_perms;
+  # Recovery embeds vold metadata-key handling, not the Android vold daemon.
+  allow recovery vold_metadata_file:dir create_dir_perms;
+  allow recovery vold_metadata_file:file create_file_perms;
+  allow recovery data_file_type:dir { create_dir_perms mounton watch };
+  allow recovery data_file_type:file { create_file_perms relabelfrom relabelto };
+  allow recovery data_file_type:lnk_file create_file_perms;
+  allow recovery data_file_type:sock_file getattr;
+  allow recovery app_data_file:fifo_file getattr;
+  allow recovery system_file:sock_file getattr;
+  allow recovery dex2oat_exec:file getattr;
+  allow recovery unlabeled:{ fifo_file sock_file } getattr;
+  allow recovery mnt_vendor_file:dir create_dir_perms;
+  allow recovery mnt_vendor_file:file create_file_perms;
+  allowxperm recovery { system_data_file system_data_root_file media_rw_data_file vendor_data_file }:dir ioctl { 0x6613 0x6615 0x6617 };
+  allowxperm recovery { system_data_file tmpfs }:file ioctl { 0xf50c };
+  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260 0x4c01 0x5331 };
+  allowxperm recovery misc_block_device:blk_file ioctl { 0x1260 };
+  # Attach/read/detach read-only APEX payload files with loop devices.
+  allowxperm recovery loop_device:blk_file ioctl {
+    LOOP_SET_FD LOOP_CLR_FD LOOP_SET_STATUS64 LOOP_GET_STATUS64
+  };
+  allow recovery gpu_device:chr_file rw_file_perms;
+  allowxperm recovery { gpu_device graphics_device }:chr_file ioctl { 0x6400-0x64ff };
+  allow recovery ashmem_libcutils_device:chr_file execute;
+  unix_socket_connect(recovery, logdr, logd)
+  set_prop(recovery, vold_prop)
+  set_prop(recovery, vold_status_prop)
+  set_prop(recovery, restorecon_prop)
+  set_prop(recovery, timezone_prop)
+  set_prop(recovery, ctl_adbd_prop)
+  # OrangeFox uses stock build/fingerprint values while initializing FBE.
+  # resetprop updates only these ramdisk property areas, not Android disk files.
+  allow recovery { build_prop build_vendor_prop build_odm_prop build_bootimage_prop
+                   fingerprint_prop default_prop storage_config_prop }:file write;
+  allow recovery properties_serial:file write;
+  set_prop(recovery, default_prop)
+  set_prop(recovery, build_prop)
+  set_prop(recovery, fingerprint_prop)
+  set_prop(recovery, boottime_public_prop)
+  # ADB checks this property after the root-domain transition.
+  get_prop(recovery, test_harness_prop)
+  get_prop(recovery, adbd_config_prop)
+  get_prop(recovery, system_adbd_prop)
+  get_prop(recovery, default_prop)
+  get_prop(recovery, build_prop)
+  get_prop(recovery, build_vendor_prop)
+  get_prop(recovery, build_odm_prop)
+  get_prop(recovery, vendor_security_patch_level_prop)
+  get_prop(recovery, recovery_usb_config_prop)
+  get_prop(recovery, keystore_config_prop)
+  get_prop(recovery, hwservicemanager_prop)
+
+  # Kernel 6.12 proc nodes and the FunctionFS recovery mount point.
+  allow init mtk_recovery_proc_bootprof:file w_file_perms;
+  # Two USB initialization attributes from init.recovery.usb.rc.
+  allow init mtk_recovery_sysfs_control:file w_file_perms;
+  allow init proc_max_map_count:file w_file_perms;
+  allow init functionfs:dir mounton;
+  allow init mtk_recovery_bootstrap:dir create_dir_perms;
+  allow init mtk_recovery_bootstrap:lnk_file create_file_perms;
+  allow init system_linker_exec:lnk_file create;
+  # create_pl_dev executes the native preloader mapping helper from the ramdisk.
+  allow update_engine rootfs:dir r_dir_perms;
+  allow update_engine rootfs:file { entrypoint rx_file_perms };
+  # create_pl_dev reads the two UFS boot regions before creating mappings.
+  allow update_engine mtk_recovery_ufs_boot_device:blk_file r_file_perms;
+  # Second-stage init loads the three recovery touch modules; ueventd raises priority.
+  allow init self:global_capability_class_set sys_module;
+  allow init rootfs:system module_load;
+  allow ueventd self:global_capability_class_set sys_nice;
+')

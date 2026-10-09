@@ -1,3 +1,0 @@
-# Trustonic TEE device nodes (stock labels: mobicore_admin_device / mobicore_user_device)
-/dev/mobicore       0660   system     system
-/dev/mobicore-user  0666   system     system

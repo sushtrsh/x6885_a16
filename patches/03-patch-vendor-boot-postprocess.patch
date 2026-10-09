@@ -1,0 +1,28 @@
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
+@@ -584,5 +584,11 @@
+ 
+      $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     if [ -n "$FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT" ]; then
++        python3 "$(dirname "$FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT")/repack_vendor_boot.py" \
++            --extract-recovery --image "$VBtmp/tmp.img" \
++            --output "$VBtmp/vendor_ramdisk_recovery.cpio" || abort 203
++     fi
++
+      F="vendor_ramdisk_recovery.cpio"; #v4+ header
+      [ ! -f $F ] && F="vendor_ramdisk/recovery.cpio"; #v4+ header+latest magiskboot canary
+      [ ! -f $F ] && F="ramdisk.cpio"; #v3 or earlier header
+@@ -1854,6 +1854,13 @@
+            INSTALLED_RECOVERYIMAGE_TARGET="$OUT/$COMPILED_IMAGE_FILE"
+         fi
+ 	process_reference_vendor_boot_image  $INSTALLED_RECOVERYIMAGE_TARGET
++	if [ -n "$FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT" ]; then
++		if [ ! -f "$FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT" ]; then
++			echo "Missing vendor_boot postprocessor: $FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT" >&2
++			abort 203
++		fi
++		bash "$FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT" "$INSTALLED_RECOVERYIMAGE_TARGET" || abort 203
++	fi
+      fi
+ 
+      # copy

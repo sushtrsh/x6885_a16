@@ -1,0 +1,32 @@
+# Ephemeral recovery device nodes and temporary keystore only.
+/dev/mobicore(-user)?   u:object_r:tee_device:s0
+/dev/mali[0-9]*        u:object_r:gpu_device:s0
+/tmp/misc/keystore(/.*)? u:object_r:keystore_data_file:s0
+
+/system/bin/bootstrap(/.*)? u:object_r:mtk_recovery_bootstrap:s0
+/dev/dri/card0 u:object_r:graphics_device:s0
+
+# Trustonic uses this separate Transsion log-control character device.
+/dev/tranlog_ctl u:object_r:mtk_recovery_tranlog_device:s0
+
+# Exact UFS boot regions read by create_pl_dev; userdata lives on sdc.
+/dev/block/sd[ab] u:object_r:mtk_recovery_ufs_boot_device:s0
+
+# ueventd labels the GPT misc node by its canonical partition-name alias.
+# BootControl already has AOSP permissions for misc_block_device.
+/dev/block/by-name/misc u:object_r:misc_block_device:s0
+/dev/block/platform/(bootdevice|soc/11270000\.ufshci)/by-name/misc u:object_r:misc_block_device:s0
+
+# Recovery init creates this volatile state directory; do not restorecon Android persist.
+/mnt/vendor/persist/mcRegistry(/.*)? u:object_r:mtk_recovery_gatekeeper_state_file:s0
+
+/sys/devices/platform/soc/soc:mtk-leds(/.*)? u:object_r:sysfs_leds:s0
+/sys/devices/platform/soc/soc:regulator-vibrator/leds/vibrator(/.*)? u:object_r:sysfs_leds:s0
+/sys/devices/platform/soc/mt_usb/saving u:object_r:mtk_recovery_sysfs_control:s0
+/etc -d u:object_r:tmpfs:s0
+/etc/recovery\.fstab u:object_r:mtk_recovery_fstab_file:s0
+/etc/fstab -l u:object_r:mtk_recovery_fstab_file:s0
+/etc/task_profiles\.json u:object_r:mtk_recovery_task_profiles_file:s0
+/etc/cgroups\.json u:object_r:mtk_recovery_cgroup_desc_file:s0
+/apex -d u:object_r:mtk_recovery_apex_dir:s0
+/kmsg -c u:object_r:kmsg_device:s0
