@@ -23,7 +23,3 @@ Unofficial device tree, Android 16 / MT6789
 | `recovery/root/` | File yang masuk ramdisk recovery: fstab, rc, firmware, modul touch, binary vendor. |
 | `patches/` | Patch ke source OrangeFox, di-apply otomatis oleh `vendorsetup.sh`. |
 | `BoardConfig.mk`, `device.mk`, `twrp.mk`, `fox.mk`, `twrp_X6885.mk` | Config utama board, product, TWRP, dan OrangeFox. |
-
-Tiga folder `bootctrl/`, `create_pl_dev/`, dan `common/` wajib ikut di-push ke repo,
-karena `BoardConfig.mk` dan `device.mk` mereferensikannya.
-
