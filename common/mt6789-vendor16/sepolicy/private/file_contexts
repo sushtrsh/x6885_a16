@@ -12,6 +12,9 @@
 # Exact UFS boot regions read by create_pl_dev; userdata lives on sdc.
 /dev/block/sd[ab] u:object_r:mtk_recovery_ufs_boot_device:s0
 
+# UFS BSG node used by the boot HAL to switch the active boot LU.
+/dev/ufs-bsg[0-9]* u:object_r:mtk_recovery_ufs_bsg_device:s0
+
 # ueventd labels the GPT misc node by its canonical partition-name alias.
 # BootControl already has AOSP permissions for misc_block_device.
 /dev/block/by-name/misc u:object_r:misc_block_device:s0
