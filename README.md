@@ -1,4 +1,4 @@
-# OrangeFox 14.1 — Infinix X6885 (fork dari tree X6850)
+# OrangeFox_Infinix X6885_a16
 
 Unofficial device tree, Android 16 / MT6789
 
