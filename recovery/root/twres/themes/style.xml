@@ -281,7 +281,7 @@
 		<variable name="theme_style_act" value="Default"/>
 		<variable name="groupitems_clr" value="#1f1811"/>
 		<variable name="actbar_color" value="%text%"/>
-		<variable name="neutral_light" value="#000000"/>
+		<variable name="neutral_light" value="#1f1811"/>
 		<variable name="text_dark" value="#ffe2bd"/>
 
 		<variable name="cards_bg" value="hsl(0, 33%, 1%)"/>
