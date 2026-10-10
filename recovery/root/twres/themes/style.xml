@@ -272,7 +272,7 @@
 		<variable name="text_hl_btn" value="#100E0D"/>
 		<variable name="text_dark" value="%neutral_300%"/>
 
-		<variable name="disabled_bg" value="#000000"/>
+		<variable name="disabled_bg" value="#1f1811"/>
 		<variable name="disabled_text" value="%neutral_200%"/>
 
 		<variable name="linecolor" value="#5F636844"/>
