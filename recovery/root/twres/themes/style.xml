@@ -272,21 +272,20 @@
 		<variable name="text_hl_btn" value="#100E0D"/>
 		<variable name="text_dark" value="%neutral_300%"/>
 
-		<variable name="disabled_bg" value="#1f1811"/>
+		<variable name="disabled_bg" value="#000000"/>
 		<variable name="disabled_text" value="%neutral_200%"/>
 
 		<variable name="linecolor" value="#5F636844"/>
 		<variable name="darktransparent" value="#000000BB"/>
 		<variable name="theme_style" value="Dark"/>
 		<variable name="theme_style_act" value="Default"/>
-		<variable name="groupitems_clr" value="#1f1811"/>
+		<variable name="groupitems_clr" value="#000000"/>
 		<variable name="actbar_color" value="%text%"/>
-		<variable name="neutral_light" value="#1f1811"/>
+		<variable name="neutral_light" value="#000000"/>
 		<variable name="text_dark" value="#ffe2bd"/>
 
-		<variable name="cards_bg" value="#1f1811"/>
+		<variable name="cards_bg" value="hsl(0, 33%, 1%)"/>
 
-		<variable name="keyboard_bg" value="#1f1811"/>
-		<variable name="keyboard_hl" value="#1f181166"/>
+		<variable name="keyboard_bg" value="#010000"/>
 	</variables>
 </recovery>
