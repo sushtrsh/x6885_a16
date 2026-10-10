@@ -284,8 +284,9 @@
 		<variable name="neutral_light" value="#1f1811"/>
 		<variable name="text_dark" value="#ffe2bd"/>
 
-		<variable name="cards_bg" value="hsl(0, 33%, 1%)"/>
+		<variable name="cards_bg" value="#1f1811"/>
 
-		<variable name="keyboard_bg" value="#010000"/>
+		<variable name="keyboard_bg" value="#1f1811"/>
+		<variable name="keyboard_hl" value="#1f181166"/>
 	</variables>
 </recovery>
