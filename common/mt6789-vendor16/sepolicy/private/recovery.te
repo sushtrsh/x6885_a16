@@ -116,6 +116,7 @@ recovery_only(`
   # Set Boot Slot: MTK boot HAL (libmtk_bsg) writes the UFS boot LU attribute via SG_IO.
   allow hal_bootctl_default mtk_recovery_ufs_bsg_device:chr_file { open read write getattr ioctl };
   allowxperm hal_bootctl_default mtk_recovery_ufs_bsg_device:chr_file ioctl { 0x2285 };
+  allow hal_bootctl_default self:global_capability_class_set sys_rawio;
   # External SD (exfat): recovery was denied search/mounton on the mounted root.
   allow recovery exfat:dir { create_dir_perms mounton };
   allow recovery exfat:file create_file_perms;
