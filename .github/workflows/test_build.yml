@@ -1,4 +1,3 @@
-
 name: Recovery Build 14.1
 
 on:
@@ -53,8 +52,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    steps:
 
+    steps:
     - name: Check Out
       uses: actions/checkout@v4
 
@@ -62,18 +61,18 @@ jobs:
       uses: rokibhasansagar/slimhub_actions@main
 
     - name: Initialize workspace
-      run: |
-        mkdir workspace
-        cd workspace
-        echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
       id: pwd
+      run: |
+        mkdir -p workspace
+        echo "workspace-folder=$(pwd)/workspace" >> "$GITHUB_OUTPUT"
 
     - name: Prepare the build environment
       run: |
         sudo apt update && sudo apt upgrade -y
-        DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            linux-modules-extra-$(uname -r) \
-            git python3 tar aria2 patch
+        sudo DEBIAN_FRONTEND=noninteractive apt install -yq \
+          linux-modules-extra-$(uname -r) \
+          git python3 tar aria2 patch ccache
+
         git clone https://gitlab.com/OrangeFox/misc/scripts
         cd scripts
         sudo bash setup/android_build_env.sh
@@ -84,38 +83,45 @@ jobs:
     - name: Install OpenJDK
       uses: actions/setup-java@v4
       with:
-        distribution: 'zulu'
+        distribution: zulu
         java-version: '11'
 
     - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
+      if: >-
+        startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com')
+        || startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com')
       uses: webfactory/ssh-agent@v0.9.0
       with:
-          ssh-private-key: |
-            ${{ secrets.SSH_PRIVATE_KEY }}
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
     - name: Sync OrangeFox sources and minimal manifest
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}
-        git clone ${{ github.event.inputs.SYNC_URL }}
+        git clone "${{ github.event.inputs.SYNC_URL }}" sync
         cd sync
-        ./orangefox_sync.sh --branch ${{ github.event.inputs.MANIFEST_BRANCH }} --path ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        ./orangefox_sync.sh \
+          --branch "${{ github.event.inputs.MANIFEST_BRANCH }}" \
+          --path "${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Clone device tree
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
+        cd "${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}"
+        git clone \
+          -b "${{ github.event.inputs.DEVICE_TREE_BRANCH }}" \
+          "${{ github.event.inputs.DEVICE_TREE_URL }}" \
+          "${{ github.event.inputs.DEVICE_PATH }}"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
+      if: >-
+        github.event.inputs.COMMON_TREE_URL != ''
+        && github.event.inputs.COMMON_PATH != ''
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
+        cd "${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}"
+        git clone \
+          -b "${{ github.event.inputs.DEVICE_TREE_BRANCH }}" \
+          "${{ github.event.inputs.COMMON_TREE_URL }}" \
+          "${{ github.event.inputs.COMMON_PATH }}"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Set Swap Space
@@ -123,33 +129,82 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Workaround for missing repo projects.
+    - name: Workaround for missing repo projects
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        cd "${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}"
         repo sync external/gflags
         repo sync external/guava
         repo sync hardware/google/interfaces
         repo sync hardware/google/pixel
 
-    - name: Building recovery
+    - name: Restore ccache
+      id: ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.ccache
+        key: ${{ runner.os }}-orangefox-ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_TREE_BRANCH }}-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-orangefox-ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.event.inputs.DEVICE_TREE_BRANCH }}-
+          ${{ runner.os }}-orangefox-ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
+
+    - name: Configure ccache
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        mkdir -p "$HOME/.ccache"
+        echo "USE_CCACHE=1" >> "$GITHUB_ENV"
+        echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+        echo "CCACHE_EXEC=$(command -v ccache)" >> "$GITHUB_ENV"
+        ccache -M 5G
+        ccache -z
+        echo "Cache hit: ${{ steps.ccache.outputs.cache-hit }}"
+        ccache -s
+
+    - name: Building recovery
+      continue-on-error: true
+      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+      run: |
+        cd "${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}"
+
         set +e
         source build/envsetup.sh
-        # vendorsetup tree ini nge-apply patch ke source OrangeFox & set FOX_* env
-        source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+        source "${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh"
+
         export ALLOW_MISSING_DEPENDENCIES=true
         export FOX_USE_ZSTD_BINARY=1
+        export USE_CCACHE=1
+        export CCACHE_DIR="$HOME/.ccache"
+        export CCACHE_EXEC="$(command -v ccache)"
         set -e
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
+
+        lunch "${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng" \
+          && make clean \
+          && mka adbd "${{ github.event.inputs.BUILD_TARGET }}image" -j"$(nproc --all)"
+
+    - name: Show ccache statistics
+      if: always()
+      run: |
+        ccache -s
+        du -sh "$HOME/.ccache" 2>/dev/null || true
+
+    - name: Save ccache
+      if: always() && steps.ccache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.ccache
+        key: ${{ steps.ccache.outputs.cache-primary-key }}
 
     - name: Check the output directory before uploading
       run: |
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/
+        OUT="${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}"
+
+        ls -al "$(dirname "$OUT")"
         echo
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+
+        if [ ! -d "$OUT" ]; then
+          echo "::error::Output directory not found: $OUT"
+          exit 1
+        fi
+
+        ls -al "$OUT"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
@@ -167,6 +222,7 @@ jobs:
           Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
           Device: ${{ github.event.inputs.DEVICE_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}
+
+          ccache: enabled (5 GB)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
