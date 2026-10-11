@@ -17,7 +17,6 @@ TW_INCLUDE_ZSTD := true
 
 # TWRP file system
 TW_ENABLE_FS_COMPRESSION    := true
-TW_INCLUDE_FUSE_EXFAT       := true
 TW_INCLUDE_FUSE_NTFS        := true
 TW_INCLUDE_NTFS_3G          := true
 TW_NO_EXFAT_FUSE            := true
