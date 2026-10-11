@@ -14,12 +14,10 @@ odm_dlkm			/odm_dlkm		auto		ro																	wait,slotselect,logical
 # Transsion partitions
 tr_carrier			/tr_carrier		auto		ro																	wait,slotselect,logical,nofail
 tr_company			/tr_company		auto		ro																	wait,slotselect,logical,nofail
-tr_mi				/tr_mi			auto		ro																	wait,slotselect,logical,nofail
 tr_overlayfs		/tr_overlayfs	auto		ro																	wait,slotselect,logical,nofail
 tr_preload			/tr_preload		auto		ro																	wait,slotselect,logical,nofail
 tr_product			/tr_product		auto		ro																	wait,slotselect,logical,nofail
 tr_region			/tr_region		auto		ro																	wait,slotselect,logical,nofail
-tr_theme			/tr_theme		auto		ro																	wait,slotselect,logical,nofail
 
 # Userdata partition
 /dev/block/by-name/metadata /metadata       ext4        noatime,nosuid,nodev,discard wait,check,formattable,first_stage_mount

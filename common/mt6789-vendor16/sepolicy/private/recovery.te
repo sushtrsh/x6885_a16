@@ -129,6 +129,7 @@ recovery_only(`
   get_prop(recovery, device_logging_prop)
   allow recovery kernel:system module_request;
   allow recovery kmsg_device:chr_file r_file_perms;
+  allow kmsg_device rootfs:filesystem associate;
   allow recovery sysfs:dir r_dir_perms;
   allow recovery sysfs:file r_file_perms;
   allow recovery sysfs:lnk_file r_file_perms;
