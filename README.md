@@ -29,7 +29,7 @@ Unofficial OrangeFox Recovery device tree for Android 16 on the MediaTek MT6789 
 | --- | --- |
 | `SYNC_URL` | `https://gitlab.com/OrangeFox/sync.git` |
 | `MANIFEST_BRANCH` | `14.1` |
-| `DEVICE_TREE_URL` | `https://github.com/sushtrsh/x6885_a16   (change to your repo url fork)` |
+| `DEVICE_TREE_URL` | `https://github.com/sushtrsh/x6885_a16 (change to your repo url fork)` |
 | `DEVICE_TREE_BRANCH` | `main` |
 | `DEVICE_PATH` | `device/infinix/X6885` |
 | `MAKEFILE_NAME` | `fox_X6885` |
