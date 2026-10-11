@@ -11,10 +11,6 @@ on:
         description: 'MANIFEST_BRANCH (OrangeFox branch)'
         required: true
         default: '14.1'
-        type: choice
-        options:
-          - 12.1
-          - 14.1
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
@@ -22,11 +18,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: 'test_x6885'
-        type: choice
-        options:
-          - main
-          - test_x6885
+        default: 'main'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
@@ -55,8 +47,8 @@ on:
         default: 'yes'
         type: choice
         options:
-          - 'yes'
-          - 'no'
+          - yes
+          - no
 
 jobs:
   build:
