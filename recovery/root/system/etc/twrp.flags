@@ -45,3 +45,10 @@
 /system_ext_image	emmc		/dev/block/bootdevice/by-name/system_ext						flags=display="System_EXT Image";backup;flashimg
 /product_image		emmc		/dev/block/bootdevice/by-name/product							flags=display="Product Image";backup;flashimg
 /vendor_dlkm_image	emmc		/dev/block/bootdevice/by-name/vendor_dlkm						flags=display="VendorDLKM Image";backup;flashimg
+/odm_dlkm_image		emmc		/dev/block/bootdevice/by-name/odm_dlkm							flags=display="OdmDLKM Image";backup;flashimg
+/tr_carrier_image	emmc		/dev/block/bootdevice/by-name/tr_carrier						flags=display="TR Carrier Image";backup;flashimg
+/tr_company_image	emmc		/dev/block/bootdevice/by-name/tr_company						flags=display="TR Company Image";backup;flashimg
+/tr_overlayfs_image	emmc		/dev/block/bootdevice/by-name/tr_overlayfs						flags=display="TR Overlayfs Image";backup;flashimg
+/tr_preload_image	emmc		/dev/block/bootdevice/by-name/tr_preload						flags=display="TR Preload Image";backup;flashimg
+/tr_product_image	emmc		/dev/block/bootdevice/by-name/tr_product						flags=display="TR Product Image";backup;flashimg
+/tr_region_image	emmc		/dev/block/bootdevice/by-name/tr_region							flags=display="TR Region Image";backup;flashimg
