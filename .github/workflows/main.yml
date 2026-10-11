@@ -26,6 +26,7 @@ on:
         type: choice
         options:
           - main
+          - test_x6885
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
