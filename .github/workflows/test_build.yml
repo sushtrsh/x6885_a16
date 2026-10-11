@@ -22,7 +22,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: 'main'
+        default: 'tree_x6885'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
@@ -146,7 +146,7 @@ jobs:
         echo "USE_CCACHE=1" >> "$GITHUB_ENV"
         echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
         echo "CCACHE_EXEC=$(command -v ccache)" >> "$GITHUB_ENV"
-        ccache -M 5G
+        ccache -M 10G
         ccache -z
         echo "Cache hit: ${{ steps.ccache.outputs.cache-hit }}"
         ccache -s
@@ -201,6 +201,6 @@ jobs:
           Device: ${{ github.event.inputs.DEVICE_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}
 
-          ccache: enabled (5 GB)
+          ccache: enabled (10 GB)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
