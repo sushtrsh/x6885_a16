@@ -23,6 +23,9 @@ on:
         description: 'DEVICE_TREE_BRANCH'
         required: true
         default: 'test_x6885'
+        type: choice
+        options:
+          - main
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
@@ -152,6 +155,7 @@ jobs:
         ccache -s
 
     - name: Building recovery
+      id: build
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         set +e
@@ -185,6 +189,7 @@ jobs:
         ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
 
     - name: Upload to Release
+      id: release
       uses: softprops/action-gh-release@v2
       with:
         files: |
@@ -204,3 +209,26 @@ jobs:
           ccache: enabled (10 GB)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Kirim notifikasi ke Telegram
+      if: always()
+      env:
+        TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BUILD_STATUS: ${{ steps.build.outcome }}
+        RELEASE_STATUS: ${{ steps.release.outcome }}
+        RELEASE_URL: ${{ steps.release.outputs.url }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        DEVICE: ${{ github.event.inputs.DEVICE_NAME }}
+        MANIFEST: ${{ github.event.inputs.MANIFEST_BRANCH }}
+        TARGET: ${{ github.event.inputs.BUILD_TARGET }}
+      run: |
+        if [ "$BUILD_STATUS" = "success" ] && [ "$RELEASE_STATUS" = "success" ]; then
+          TEXT=$(printf '✅ Build selesai\nDevice: %s\nManifest: %s\nTarget: %s\nRelease: %s' \
+            "$DEVICE" "$MANIFEST" "$TARGET" "$RELEASE_URL")
+        else
+          TEXT=$(printf '❌ Build gagal\nDevice: %s\nLog: %s' "$DEVICE" "$RUN_URL")
+        fi
+        curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+          --data-urlencode "chat_id=${CHAT_ID}" \
+          --data-urlencode "text=${TEXT}"
