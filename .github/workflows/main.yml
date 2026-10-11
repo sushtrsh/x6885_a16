@@ -8,7 +8,7 @@ on:
         required: true
         default: 'https://gitlab.com/OrangeFox/sync.git'
       MANIFEST_BRANCH:
-        description: 'MANIFEST_BRANCH'
+        description: 'MANIFEST_BRANCH (OrangeFox branch)'
         required: true
         default: '14.1'
         type: choice
@@ -49,6 +49,14 @@ on:
         description: 'BUILD_TARGET'
         required: true
         default: 'vendorboot'
+      USE_CCACHE:
+        description: 'Use ccache (restore + save)'
+        required: true
+        default: 'yes'
+        type: choice
+        options:
+          - 'yes'
+          - 'no'
 
 jobs:
   build:
@@ -135,6 +143,7 @@ jobs:
         repo sync hardware/google/pixel
 
     - name: Restore ccache
+      if: github.event.inputs.USE_CCACHE == 'yes'
       id: ccache
       uses: actions/cache/restore@v4
       with:
@@ -145,6 +154,7 @@ jobs:
           ${{ runner.os }}-orangefox-ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
 
     - name: Configure ccache
+      if: github.event.inputs.USE_CCACHE == 'yes'
       run: |
         mkdir -p "$HOME/.ccache"
         echo "USE_CCACHE=1" >> "$GITHUB_ENV"
@@ -171,13 +181,13 @@ jobs:
       continue-on-error: true
 
     - name: Show ccache statistics
-      if: always()
+      if: always() && github.event.inputs.USE_CCACHE == 'yes'
       run: |
         ccache -s
         du -sh "$HOME/.ccache" 2>/dev/null || true
 
     - name: Save ccache
-      if: always() && steps.ccache.outputs.cache-hit != 'true'
+      if: always() && github.event.inputs.USE_CCACHE == 'yes' && steps.ccache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ~/.ccache
