@@ -22,13 +22,6 @@ on fs
     symlink /dev/block/platform/soc/11270000.ufshci /dev/block/bootdevice
 	install_keyring
 
-
-on property:vendor.mtk.boot1_linkb=1
-    symlink /dev/block/sdb /dev/block/mmcblk0boot1
-
-on property:vendor.mtk.boot1_linkc=1
-    symlink /dev/block/sdc /dev/block/mmcblk0boot1
-
 on property:ro.crypto.state=encrypted && property:ro.boot.dynamic_partitions=true
 	start mobicore
 
