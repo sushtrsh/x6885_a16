@@ -22,7 +22,7 @@ on:
       DEVICE_TREE_BRANCH:
         description: 'DEVICE_TREE_BRANCH'
         required: true
-        default: 'tree_x6885'
+        default: 'test_x6885'
       DEVICE_PATH:
         description: 'DEVICE_PATH'
         required: true
