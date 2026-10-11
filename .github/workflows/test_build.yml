@@ -16,7 +16,7 @@ on:
           - 12.1
           - 14.1
       DEVICE_TREE_URL:
-        description: 'DEVICE_TREE_URL (ganti USERNAME dengan akun GitHub kamu)'
+        description: 'DEVICE_TREE_URL'
         required: true
         default: 'https://github.com/sushtrsh/x6885_a16'
       DEVICE_TREE_BRANCH:
