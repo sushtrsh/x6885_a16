@@ -105,13 +105,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     android.hardware.security.keymint-V3-ndk
 
-PRODUCT_PACKAGES_DEBUG += \
-    bootctrl
-
-PRODUCT_PACKAGES += \
-    bootctrl.mt6789 \
-    bootctrl.mt6789.recovery
-
 # create_pl_dev
 PRODUCT_PACKAGES += \
     create_pl_dev \
