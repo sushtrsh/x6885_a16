@@ -44,7 +44,7 @@ on:
       USE_CCACHE:
         description: 'Use ccache (restore + save)'
         required: true
-        default: 'yes'
+        default: 'true'
         type: choice
         options:
           - true
