@@ -38,6 +38,8 @@ export FOX_VENDOR_BOOT_RECOVERY=1
 export FOX_INSTALLER_VENDOR_BOOT_RAMDISK_INSTALL=0
 unset FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT FOX_REFERENCE_VENDOR_BOOT_IMAGE
 export FOX_USE_ZSTD_BINARY=1
+export FOX_USE_NANO_EDITOR=1
+
 export FOX_USE_DMSETUP=1
 
 legacy_patch="${device_dir}/patches/03-patch-vendor-boot-postprocess.patch"
