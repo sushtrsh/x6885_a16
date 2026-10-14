@@ -1,0 +1,11 @@
+--- a/vendor/twrp/build/sepolicy/private/twrp.te
++++ b/vendor/twrp/build/sepolicy/private/twrp.te
+@@ -1,4 +1,8 @@
+ recovery_only(`
++  # External SD (vfat, labelled u:object_r:vfat:s0). Recovery is enforcing
++  # (see patch 05), so it needs explicit access to mount and use the card.
++  allow recovery vfat:dir { create_dir_perms mounton };
++  allow recovery vfat:file create_file_perms;
+   allow kernel unlabeled:file rw_file_perms;
+   allow kernel tmpfs:file { read };
+   allow kernel recovery:fd { use };
