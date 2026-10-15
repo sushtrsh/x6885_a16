@@ -1,4 +1,4 @@
-name: Recovery Build 14.1
+name: Recovery Build 16.0
 
 on:
   workflow_dispatch:
@@ -6,11 +6,11 @@ on:
       SYNC_URL:
         description: 'SYNC_URL'
         required: true
-        default: 'https://gitlab.com/OrangeFox/sync.git'
+        default: 'https://github.com/OrangeFox16/sync.git'
       MANIFEST_BRANCH:
         description: 'MANIFEST_BRANCH (OrangeFox branch)'
         required: true
-        default: '14.1'
+        default: '16.0'
       DEVICE_TREE_URL:
         description: 'DEVICE_TREE_URL'
         required: true
@@ -34,13 +34,17 @@ on:
         required: true
         default: 'X6885'
       MAKEFILE_NAME:
-        description: 'MAKEFILE_NAME (lunch: <MAKEFILE_NAME>-ap2a-eng)'
+        description: 'MAKEFILE_NAME (lunch: <MAKEFILE_NAME>-bp2a-eng)'
         required: true
         default: 'fox_X6885'
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
         default: 'vendorboot'
+      PATCHES:
+        description: 'PATCHES (all | none | contoh: 01 02 07)'
+        required: true
+        default: 'none'
       USE_CCACHE:
         description: 'Use ccache (restore + save)'
         required: true
@@ -126,13 +130,13 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Workaround for missing repo projects.
+    - name: Workaround for missing repo projects (14.1-era, may not exist in 16.0)
       run : |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        repo sync external/gflags
-        repo sync external/guava
-        repo sync hardware/google/interfaces
-        repo sync hardware/google/pixel
+        repo sync external/gflags || true
+        repo sync external/guava || true
+        repo sync hardware/google/interfaces || true
+        repo sync hardware/google/pixel || true
 
     - name: Restore ccache
       if: github.event.inputs.USE_CCACHE == 'true'
@@ -164,11 +168,12 @@ jobs:
         set +e
         source build/envsetup.sh
         # vendorsetup tree ini nge-apply patch ke source OrangeFox & set FOX_* env
+        export X6885_PATCHES="${{ github.event.inputs.PATCHES }}"
         source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         export FOX_USE_ZSTD_BINARY=1
         set -e
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-bp2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       continue-on-error: true
 

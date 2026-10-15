@@ -31,6 +31,19 @@ patch_files=(
     "${device_dir}/patches/08-patch-enforcing-runtime.patch"
 )
 
+# X6885_PATCHES: all (default) | none | daftar nomor, mis. "01 02 07"
+sel="${X6885_PATCHES:-all}"
+if [[ "$sel" != "all" ]]; then
+    filtered=()
+    for p in "${patch_files[@]}"; do
+        n="$(basename "$p")"; n="${n%%-*}"
+        for w in $sel; do [[ "$sel" != "none" && "$n" == "$w" ]] && filtered+=("$p"); done
+    done
+    patch_files=("${filtered[@]}")
+    unset filtered p n w
+fi
+unset sel
+
 export ALLOW_MISSING_DEPENDENCIES=true
 export FOX_BUILD_DEVICE=X6885
 export FOX_VIRTUAL_AB_DEVICE=1

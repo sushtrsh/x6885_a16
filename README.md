@@ -19,7 +19,7 @@ Unofficial OrangeFox Recovery device tree for Android 16 on the MediaTek MT6789 
 
 1. Fork this repository.
 2. Open the **Actions** tab in your fork.
-3. Select **Recovery Build 14.1**.
+3. Select **Recovery Build 16.0**.
 4. Click **Run workflow**.
 5. Configure the workflow inputs as needed.
 
@@ -27,8 +27,8 @@ Unofficial OrangeFox Recovery device tree for Android 16 on the MediaTek MT6789 
 
 | Input | Default Value |
 | --- | --- |
-| `SYNC_URL` | `https://gitlab.com/OrangeFox/sync.git` |
-| `MANIFEST_BRANCH` | `14.1` |
+| `SYNC_URL` | `https://github.com/OrangeFox16/sync.git` |
+| `MANIFEST_BRANCH` | `16.0` |
 | `DEVICE_TREE_URL` | `https://github.com/sushtrsh/x6885_a16 (change to your repo url fork)` |
 | `DEVICE_TREE_BRANCH` | `main` |
 | `DEVICE_PATH` | `device/infinix/X6885` |
@@ -36,7 +36,7 @@ Unofficial OrangeFox Recovery device tree for Android 16 on the MediaTek MT6789 
 | `BUILD_TARGET` | `vendorboot` |
 | `Use ccache` | `yes` |
 
-The default configuration targets OrangeFox Recovery 14.1 for the Infinix X6885.
+The default configuration targets OrangeFox Recovery 16.0 for the Infinix X6885.
 
 ## Disclaimer
 
