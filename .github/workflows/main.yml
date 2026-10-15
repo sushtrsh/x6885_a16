@@ -170,11 +170,19 @@ jobs:
         fi
         grep -n 'UpdateUsesSnapuserd' "$f" || true
 
+    - name: Diag OrangeFox vendor
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        find . -path ./out -prune -o -name 'OrangeFox_vendor.sh' -print
+        ls vendor/recovery | head -50
+        grep -rn "OrangeFox_vendor" vendor/recovery --include=*.mk --include=*.sh | head
+
     - name: Building recovery
       id: build
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         set +e
+        export X6885_PATCHES="${{ github.event.inputs.PATCHES }}"
         source build/envsetup.sh
         # vendorsetup tree ini nge-apply patch ke source OrangeFox & set FOX_* env
         export X6885_PATCHES="${{ github.event.inputs.PATCHES }}"
