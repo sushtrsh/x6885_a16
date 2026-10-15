@@ -21,6 +21,15 @@
 
 device_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace_root="$(cd "${device_dir}/../../.." && pwd)"
+
+# X6885_ALLOW_MK: izinkan Android.mk magisk-prebuilt (diblok denylist soong di A16)
+_deny="${workspace_root}/build/soong/ui/build/androidmk_denylist.go"
+if [[ -f "${_deny}" ]] && ! grep -q 'X6885_ALLOW_MK' "${_deny}"; then
+    sed -i '/for _, mkFile := range androidMks {/a if strings.HasPrefix(mkFile, "external/magisk-prebuilt/") { continue } // X6885_ALLOW_MK' "${_deny}"
+    grep -q 'X6885_ALLOW_MK' "${_deny}" && echo "[X6885] denylist: magisk-prebuilt diizinkan." \
+        || echo "[X6885] WARNING: pola denylist tidak ketemu, cek ${_deny}"
+fi
+unset _deny
 patch_files=(
     "${device_dir}/patches/01-patch-vibration.patch"
     "${device_dir}/patches/02-patch-health-hal.patch"
@@ -78,6 +87,8 @@ for patch_file in "${patch_files[@]}"; do
         echo "[X6885] Already applied $(basename "${patch_file}")."
     else
         echo "[X6885] Patch does not apply: ${patch_file}"
+        # X6885_DIAG: tampilkan hunk yang ditolak biar kelihatan di log
+        (cd "${workspace_root}" && patch -p1 -N --dry-run < "${patch_file}") 2>&1 | head -80 | sed 's/^/[X6885]   /'
         patches_ok=false
         break
     fi
