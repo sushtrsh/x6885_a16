@@ -177,6 +177,13 @@ jobs:
         ls vendor/recovery | head -50
         grep -rn "OrangeFox_vendor" vendor/recovery --include=*.mk --include=*.sh | head
 
+    - name: Diag fscrypt header
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        find . -path ./out -prune -o -name 'fscrypt_policy.h' -print
+        grep -n -B2 -A12 'include_dirs\|local_include_dirs\|TW_INCLUDE_CRYPTO' bootable/recovery/gui/Android.bp | head -80
+        sed -n 25,40p bootable/recovery/partitions.hpp
+
     - name: Building recovery
       id: build
       run: |
