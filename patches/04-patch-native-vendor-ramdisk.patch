@@ -1,3 +1,5 @@
+# X6885 A16 | 04-patch-native-vendor-ramdisk.patch
+#
 --- a/build/make/core/config.mk
 +++ b/build/make/core/config.mk
 @@ -681,6 +681,7 @@
@@ -109,18 +111,3 @@
 +    cflags: ["-Wno-unused-parameter"],
 +    stl: "none",
 +}
---- a/vendor/recovery/OrangeFox_vendor.sh
-+++ b/vendor/recovery/OrangeFox_vendor.sh
-@@ -582,7 +582,11 @@
- 	fi
-      fi
- 
--     $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
-+     if [ -n "$recovery_uncompressed_ramdisk" ] && [ -f "$recovery_uncompressed_ramdisk" ]; then
-+        $CP -p "$recovery_uncompressed_ramdisk" "$VBtmp/vendor_ramdisk_recovery.cpio" || abort 203
-+     else
-+        $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
-+     fi
-      F="vendor_ramdisk_recovery.cpio"; #v4+ header
-      [ ! -f $F ] && F="vendor_ramdisk/recovery.cpio"; #v4+ header+latest magiskboot canary
-      [ ! -f $F ] && F="ramdisk.cpio"; #v3 or earlier header
