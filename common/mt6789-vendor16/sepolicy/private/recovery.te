@@ -70,6 +70,9 @@ recovery_only(`
   allow recovery vold_key:keystore2_key { use manage_blob };
   allow recovery locksettings_key:keystore2_key { use get_info req_forced_op };
   allow keystore recovery:binder transfer;
+  binder_call(keystore, recovery)
+  binder_call(hal_keymint_default, recovery)
+  binder_call(hal_gatekeeper_default, recovery)
   allow keystore recovery:fd use;
   allow keystore tmpfs:dir create_dir_perms;
   allow keystore tmpfs:file create_file_perms;
