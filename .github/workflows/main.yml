@@ -179,6 +179,14 @@ jobs:
           echo "patched: $f"
         done
 
+        # 4) sepolicy: /etc dan /apex di file_contexts device bentrok dgn system/sepolicy (A16)
+        #    -> hapus spec generik AOSP, biar label recovery dari device tree yang dipakai
+        for f in $(find system/sepolicy -name file_contexts -path '*/private/*' -not -path '*/prebuilts/*'); do
+          sed -i -E '/^\/etc[[:space:]]+(-.[[:space:]]+)?u:object_r:rootfs:s0/d; /^\/apex[[:space:]]+(-.[[:space:]]+)?u:object_r:apex_mnt_dir:s0/d' "$f"
+          echo "sepolicy fixed: $f"
+          grep -n -E '^/(etc|apex)[[:space:]]' "$f" || true
+        done
+
     - name: Building recovery
       id: build
       run: |
