@@ -1,0 +1,20 @@
+# X6885 A16 | 04b-patch-vendor-script-recovery-cpio.patch
+# Tujuan : Pakai recovery_uncompressed_ramdisk langsung (tanpa magiskboot unpack). Pasangan 04.
+# Target : vendor/recovery/OrangeFox_vendor.sh
+# Status : TIDAK AKTIF: file itu tidak ada di manifest 16.0 (adanya OrangeFox_A16.sh). Retarget dulu, baru masukkan ke patch_files
+#
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
+@@ -582,7 +582,11 @@
+ 	fi
+      fi
+ 
+-     $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     if [ -n "$recovery_uncompressed_ramdisk" ] && [ -f "$recovery_uncompressed_ramdisk" ]; then
++        $CP -p "$recovery_uncompressed_ramdisk" "$VBtmp/vendor_ramdisk_recovery.cpio" || abort 203
++     else
++        $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     fi
+      F="vendor_ramdisk_recovery.cpio"; #v4+ header
+      [ ! -f $F ] && F="vendor_ramdisk/recovery.cpio"; #v4+ header+latest magiskboot canary
+      [ ! -f $F ] && F="ramdisk.cpio"; #v3 or earlier header
