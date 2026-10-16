@@ -1,10 +1,10 @@
 # X6885 A16 | 04b-patch-vendor-script-recovery-cpio.patch
 # Tujuan : Pakai recovery_uncompressed_ramdisk langsung (tanpa magiskboot unpack). Pasangan 04.
-# Target : vendor/recovery/OrangeFox_A16.sh
-# Status : retarget ke OrangeFox_A16.sh, konteks hunk belum dicek
+# Target : vendor/recovery/OrangeFox_vendor.sh
+# Status : target OrangeFox_vendor.sh (A16.sh cuma symlink ke sini); dry-run lolos
 #
---- a/vendor/recovery/OrangeFox_A16.sh
-+++ b/vendor/recovery/OrangeFox_A16.sh
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
 @@ -582,7 +582,11 @@
  	fi
       fi
