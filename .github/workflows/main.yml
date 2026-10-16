@@ -184,6 +184,15 @@ jobs:
         grep -n -B2 -A12 'include_dirs\|local_include_dirs\|TW_INCLUDE_CRYPTO' bootable/recovery/gui/Android.bp | head -80
         sed -n 25,40p bootable/recovery/partitions.hpp
 
+    - name: Fix fscrypt include for libguitwrp
+      run: |
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        f=bootable/recovery/gui/Android.bp
+        if ! grep -q '"system/vold"' "$f"; then
+          sed -i '0,/"bootable\/recovery\/Fox_ssl\/include",/s//"bootable\/recovery\/Fox_ssl\/include",\n        "system\/vold",/' "$f"
+        fi
+        grep -n -B1 -A1 '"system/vold"' "$f"
+
     - name: Building recovery
       id: build
       run: |
