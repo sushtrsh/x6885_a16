@@ -34,6 +34,7 @@ patch_files=(
     "${device_dir}/patches/01-patch-vibration.patch"
     "${device_dir}/patches/02-patch-health-hal.patch"
     "${device_dir}/patches/04-patch-native-vendor-ramdisk.patch"
+    "${device_dir}/patches/04b-patch-vendor-script-recovery-cpio.patch"
     "${device_dir}/patches/05-patch-enforcing-recovery.patch"
     "${device_dir}/patches/06-patch-fbe-auth-token.patch"
     "${device_dir}/patches/07-patch-sideload-install-once.patch"
