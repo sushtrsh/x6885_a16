@@ -110,14 +110,18 @@ PRODUCT_PACKAGES += \
     create_pl_dev \
     create_pl_dev.recovery
 
-# Update engine
+# Update engine (X6885_NO_UE=1 -> dilewati; dipakai kalau source update_engine tidak cocok dengan libsnapshot)
+ifneq ($(X6885_NO_UE),1)
 PRODUCT_PACKAGES += \
     update_engine \
-    update_engine_sideload \
-    update_verifier
+    update_engine_sideload
 
 PRODUCT_PACKAGES_DEBUG += \
     update_engine_client
+endif
+
+PRODUCT_PACKAGES += \
+    update_verifier
 
 # Stock modules live only in PLATFORM; they are available in both boot modes.
 MTK_VENDOR16_RAMDISK_MODULES_DIR := $(DEVICE_PATH)/prebuilt/modules

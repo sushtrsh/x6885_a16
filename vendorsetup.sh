@@ -52,6 +52,13 @@ if [[ "$sel" != "all" ]]; then
     unset filtered p n w
 fi
 unset sel
+# X6885_NO_UE: 1 (default) = jangan build update_engine*, 0 = build (lihat device.mk)
+export X6885_NO_UE="${X6885_NO_UE:-1}"
+echo "[X6885] PATCHES=${X6885_PATCHES:-all} NO_UE=${X6885_NO_UE}"
+echo "[X6885] rev update_engine: $(git -C "${workspace_root}/system/update_engine" log -1 --format='%h %cs' 2>/dev/null)"
+echo "[X6885] rev system/core:   $(git -C "${workspace_root}/system/core" log -1 --format='%h %cs' 2>/dev/null)"
+echo "[X6885] UpdateUsesSnapuserd di header libsnapshot: $(grep -rl UpdateUsesSnapuserd "${workspace_root}/system/core/fs_mgr/libsnapshot/include" 2>/dev/null | wc -l) file"
+echo "[X6885] isi vendor/recovery: $(ls "${workspace_root}/vendor/recovery" 2>/dev/null | head -40 | tr '\n' ' ')"
 
 export ALLOW_MISSING_DEPENDENCIES=true
 export FOX_BUILD_DEVICE=X6885
