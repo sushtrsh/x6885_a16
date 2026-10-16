@@ -130,14 +130,6 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Workaround for missing repo projects (14.1-era, may not exist in 16.0)
-      run : |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        repo sync external/gflags || true
-        repo sync external/guava || true
-        repo sync hardware/google/interfaces || true
-        repo sync hardware/google/pixel || true
-
     - name: Restore ccache
       if: github.event.inputs.USE_CCACHE == 'true'
       id: ccache
@@ -161,47 +153,41 @@ jobs:
         echo "Cache hit: ${{ steps.ccache.outputs.cache-hit }}"
         ccache -s
 
-    - name: Fix update_engine vs libsnapshot mismatch
+    - name: Apply source fixes (A16 / minimal manifest)
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+
+        # 1) update_engine vs libsnapshot mismatch (UpdateUsesSnapuserd belum ada di ISnapshotManager)
         f=system/update_engine/aosp/dynamic_partition_control_android.cc
         if ! grep -rq 'UpdateUsesSnapuserd' system/core/fs_mgr/libsnapshot/include; then
           sed -i 's/GetSnapshotManager()->UpdateUsesSnapuserd()/false/' "$f"
         fi
         grep -n 'UpdateUsesSnapuserd' "$f" || true
 
-    - name: Diag OrangeFox vendor
-      run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        find . -path ./out -prune -o -name 'OrangeFox_vendor.sh' -print
-        ls vendor/recovery | head -50
-        grep -rn "OrangeFox_vendor" vendor/recovery --include=*.mk --include=*.sh | head
-
-    - name: Diag fscrypt header
-      run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        find . -path ./out -prune -o -name 'fscrypt_policy.h' -print
-        grep -n -B2 -A12 'include_dirs\|local_include_dirs\|TW_INCLUDE_CRYPTO' bootable/recovery/gui/Android.bp | head -80
-        sed -n 25,40p bootable/recovery/partitions.hpp
-
-    - name: Fix fscrypt include for libguitwrp
-      run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        # 2) libguitwrp butuh system/vold buat fscrypt_policy.h
         f=bootable/recovery/gui/Android.bp
         if ! grep -q '"system/vold"' "$f"; then
           sed -i '0,/"bootable\/recovery\/Fox_ssl\/include",/s//"bootable\/recovery\/Fox_ssl\/include",\n        "system\/vold",/' "$f"
         fi
         grep -n -B1 -A1 '"system/vold"' "$f"
 
+        # 3) fallback TW_OZIP_DECRYPT_KEY (dipakai action.cpp, tidak ada default di tree 16.0)
+        for f in $(grep -rl 'TW_OZIP_DECRYPT_KEY' bootable/recovery --include=*.cpp --include=*.hpp --include=*.h); do
+          if ! grep -q 'define TW_OZIP_DECRYPT_KEY' "$f"; then
+            sed -i '1i #ifndef TW_OZIP_DECRYPT_KEY\n#define TW_OZIP_DECRYPT_KEY "0"\n#endif' "$f"
+          fi
+          echo "patched: $f"
+        done
+
     - name: Building recovery
       id: build
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         set +e
+        # HARUS sebelum envsetup: envsetup ikut nge-source vendorsetup.sh device
         export X6885_PATCHES="${{ github.event.inputs.PATCHES }}"
         source build/envsetup.sh
         # vendorsetup tree ini nge-apply patch ke source OrangeFox & set FOX_* env
-        export X6885_PATCHES="${{ github.event.inputs.PATCHES }}"
         source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         export FOX_USE_ZSTD_BINARY=1
