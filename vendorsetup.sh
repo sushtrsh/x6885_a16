@@ -87,6 +87,11 @@ for patch_file in "${patch_files[@]}"; do
         failed_patches+=("$(basename "${patch_file}")")
         continue
     fi
+    if [[ "$(basename "${patch_file}")" == "06-patch-fbe-auth-token.patch" ]] && \
+       grep -q "Gatekeeper auth token accepted by keystore" "${workspace_root}/system/vold/Decrypt.cpp" 2>/dev/null; then
+        echo "[X6885] Already applied $(basename "${patch_file}") (verified by signature)."
+        continue
+    fi
     if (cd "${workspace_root}" && patch -p1 -N --dry-run --silent < "${patch_file}" >/dev/null 2>&1); then
         if ! (cd "${workspace_root}" && patch -p1 -N --silent < "${patch_file}"); then
             patches_ok=false
