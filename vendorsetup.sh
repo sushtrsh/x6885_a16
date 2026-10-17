@@ -78,17 +78,20 @@ if (cd "${workspace_root}" && patch -p1 -R --dry-run --silent < "${legacy_patch}
 fi
 unset legacy_patch
 
+failed_patches=()
 patches_ok=true
 for patch_file in "${patch_files[@]}"; do
     if [[ ! -f "${patch_file}" ]] || ! command -v patch >/dev/null 2>&1; then
         echo "[X6885] Missing patch or patch command: ${patch_file}"
         patches_ok=false
-        break
+        failed_patches+=("$(basename "${patch_file}")")
+        continue
     fi
     if (cd "${workspace_root}" && patch -p1 -N --dry-run --silent < "${patch_file}" >/dev/null 2>&1); then
         if ! (cd "${workspace_root}" && patch -p1 -N --silent < "${patch_file}"); then
             patches_ok=false
-            break
+            failed_patches+=("$(basename "${patch_file}")")
+            continue
         fi
         echo "[X6885] Applied $(basename "${patch_file}")."
     elif (cd "${workspace_root}" && patch -p1 -R --dry-run --silent < "${patch_file}" >/dev/null 2>&1); then
@@ -98,10 +101,12 @@ for patch_file in "${patch_files[@]}"; do
         # X6885_DIAG: tampilkan hunk yang ditolak biar kelihatan di log
         (cd "${workspace_root}" && patch -p1 -N --dry-run < "${patch_file}") 2>&1 | head -80 | sed 's/^/[X6885]   /'
         patches_ok=false
-        break
+        failed_patches+=("$(basename "${patch_file}")")
+        continue
     fi
 done
 
+echo " patch gagal: ${failed_patches[*]:-tidak ada}"
 if [[ "${patches_ok}" != true ]]; then
     unset device_dir workspace_root patch_files patch_file patches_ok
     return 1
