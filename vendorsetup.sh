@@ -54,7 +54,6 @@ export FOX_USE_GREP_BINARY=1
 # Fox Settings
 export FOX_ALLOW_EARLY_SETTINGS_LOAD=1
 export FOX_RESET_SETTINGS="disabled"
-export FOX_NO_BLANK_DT2W=1
 
 
 legacy_patch="${device_dir}/patches/03-patch-vendor-boot-postprocess.patch"
