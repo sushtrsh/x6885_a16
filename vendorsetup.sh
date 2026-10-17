@@ -37,10 +37,25 @@ export FOX_VIRTUAL_AB_DEVICE=1
 export FOX_VENDOR_BOOT_RECOVERY=1
 export FOX_INSTALLER_VENDOR_BOOT_RAMDISK_INSTALL=0
 unset FOX_VENDOR_BOOT_POSTPROCESS_SCRIPT FOX_REFERENCE_VENDOR_BOOT_IMAGE
-export FOX_USE_ZSTD_BINARY=1
-export FOX_USE_NANO_EDITOR=1
-
 export FOX_USE_DMSETUP=1
+
+# Compression Binaries & Tools
+export FOX_USE_BASH_SHELL=1
+export FOX_USE_NANO_EDITOR=1
+export FOX_USE_TAR_BINARY=1
+export FOX_USE_LZ4_BINARY=1
+export FOX_USE_SED_BINARY=1
+export FOX_USE_XZ_UTILS=1
+export FOX_USE_ZSTD_BINARY=1
+export FOX_ENABLE_APP_MANAGER=1
+export FOX_USE_BUSYBOX_BINARY=1
+export FOX_USE_GREP_BINARY=1
+
+# Fox Settings
+export FOX_ALLOW_EARLY_SETTINGS_LOAD=1
+export FOX_RESET_SETTINGS="disabled"
+export FOX_NO_BLANK_DT2W=1
+
 
 legacy_patch="${device_dir}/patches/03-patch-vendor-boot-postprocess.patch"
 if (cd "${workspace_root}" && patch -p1 -R --dry-run --silent < "${legacy_patch}" >/dev/null 2>&1); then
