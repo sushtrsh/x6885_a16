@@ -120,6 +120,12 @@ recovery_only(`
   # External SD (exfat): recovery was denied search/mounton on the mounted root.
   allow recovery exfat:dir { create_dir_perms mounton };
   allow recovery exfat:file create_file_perms;
+  # /system_dlkm (erofs, read-only logical partition): recovery was denied
+  # search/getattr/mounton on the mounted root (system_dlkm_file), so the mount
+  # failed with EACCES and the denial repeated on every partition refresh.
+  allow recovery system_dlkm_file:dir { r_dir_perms mounton };
+  allow recovery system_dlkm_file:file r_file_perms;
+  allow recovery system_dlkm_file:lnk_file r_file_perms;
   allow recovery mtk_recovery_fstab_file:file create_file_perms;
   allow recovery mtk_recovery_fstab_file:lnk_file r_file_perms;
   allow init mtk_recovery_fstab_file:lnk_file create_file_perms;
