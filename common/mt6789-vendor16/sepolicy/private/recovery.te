@@ -154,9 +154,7 @@ recovery_only(`
   # Recovery embeds vold metadata-key handling, not the Android vold daemon.
   allow recovery vold_metadata_file:dir create_dir_perms;
   allow recovery vold_metadata_file:file create_file_perms;
-  # vold_prepare_subdirs relabels /data/misc_ce/0/sdksandbox with per-user MLS categories;
-  # a denied relabelfrom makes fscrypt_prepare_user_storage report "Failed to decrypt user 0".
-  allow recovery data_file_type:dir { create_dir_perms mounton watch relabelfrom relabelto };
+  allow recovery data_file_type:dir { create_dir_perms mounton watch };
   allow recovery data_file_type:file { create_file_perms relabelfrom relabelto };
   allow recovery data_file_type:lnk_file create_file_perms;
   allow recovery data_file_type:sock_file getattr;
