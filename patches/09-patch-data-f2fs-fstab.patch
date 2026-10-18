@@ -1,0 +1,56 @@
+--- a/bootable/recovery/partitionmanager.cpp	2026-10-18 01:48:45.914421252 +0000
++++ b/bootable/recovery/partitionmanager.cpp	2026-10-18 01:48:45.914471601 +0000
+@@ -137,6 +137,45 @@
+ 
+ // Generated vendor fstab belongs on writable recovery tmpfs.
+ std::string additional_fstab = "/tmp/additional.fstab";
++#include <fstream>
++#include <sstream>
++#include <string>
++#include <vector>
++
++// The stock vendor fstab lists /data twice: f2fs first, then an ext4 fallback.
++// OrangeFox lets the later line win, so userdata was treated as ext4 and a
++// wipe/format from recovery could produce the wrong filesystem. When an f2fs
++// /data entry exists, drop the ext4 fallback from the generated copy.
++static void Drop_Ext4_Data_Fallback(const std::string& path) {
++	std::ifstream in(path);
++	if (!in.is_open())
++		return;
++	std::vector<std::string> lines;
++	std::string line;
++	bool has_f2fs_data = false;
++	while (std::getline(in, line)) {
++		lines.push_back(line);
++		std::istringstream ss(line);
++		std::string src, mnt, fs;
++		if ((ss >> src >> mnt >> fs) && src[0] != '#' && mnt == "/data" && fs == "f2fs")
++			has_f2fs_data = true;
++	}
++	in.close();
++	if (!has_f2fs_data)
++		return;
++	std::ofstream out(path, std::ios::trunc);
++	if (!out.is_open())
++		return;
++	for (const auto& l : lines) {
++		std::istringstream ss(l);
++		std::string src, mnt, fs;
++		if ((ss >> src >> mnt >> fs) && src[0] != '#' && mnt == "/data" && fs == "ext4") {
++			LOGINFO("Dropping ext4 /data fallback from additional fstab\n");
++			continue;
++		}
++		out << l << "\n";
++	}
++}
+ 
+ TWPartitionManager::TWPartitionManager(void) {
+ 	mtp_was_enabled = false;
+@@ -514,6 +553,7 @@
+ 		if (TWFunc::Find_Fstab(Fstab_Filename)) {
+ 			LOGINFO("Fstab: %s\n", Fstab_Filename.c_str());
+ 			if (TWFunc::copy_file(Fstab_Filename, additional_fstab, 0600, false) == 0) {
++				Drop_Ext4_Data_Fallback(additional_fstab);
+ 				Fstab_Filename = additional_fstab;
+ 				property_set("fstab.additional", "1");
+ 				goto parse;
