@@ -178,6 +178,16 @@ recovery_only(`
   # writing partition metadata; without these, flashing a ROM zip fails with
   # "Failed to write partition table" and system_a/product_a/system_ext_a are never resized.
   allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260-0x127f };
+  # Format Data: OrangeFox runs dmsetup to drop the userdata dm-default-key
+  # mapping before make_f2fs; dmsetup was denied write on /dev (mkdir /dev/mapper),
+  # so mkfs failed with "In use by the system!". Only the first rule is confirmed
+  # by dmesg; the rest anticipate the next dmsetup steps (mknod control, DM ioctls).
+  allow recovery device:dir { write add_name remove_name create setattr getattr search };
+  allow recovery device:chr_file { create setattr unlink getattr open read write ioctl };
+  allow recovery dm_device:chr_file { getattr open read write ioctl };
+  allowxperm recovery { device dm_device }:chr_file ioctl { 0xfd00-0xfd1f };
+  # sh in recovery: TIOCGPGRP/TIOCGWINSZ on /tmp/recovery.log (denied in dmesg).
+  allowxperm recovery tmpfs:file ioctl { 0x540f 0x5413 };
   allowxperm recovery misc_block_device:blk_file ioctl { 0x1260 };
   # Attach/read/detach read-only APEX payload files with loop devices.
   allowxperm recovery loop_device:blk_file ioctl {
