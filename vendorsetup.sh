@@ -80,7 +80,9 @@ for patch_file in "${patch_files[@]}"; do
         echo "[X6885] Already applied $(basename "${patch_file}")."
     else
         echo "[X6885] Patch does not apply: ${patch_file}"
-        (cd "${workspace_root}" && patch -p1 -N --dry-run < "${patch_file}" 2>&1 | grep -E "^(patching file|Hunk|[0-9]+ out of|File .* is read-only|.*FAILED|.*can.t find)" | head -60)
+        echo "[X6885] --- patch diagnostics: $(basename "${patch_file}") (workspace: ${workspace_root}) ---"
+        (cd "${workspace_root}" && patch -p1 -N --dry-run -i "${patch_file}" </dev/null 2>&1 | head -80)
+        echo "[X6885] --- end diagnostics ---"
         patches_ok=false
         break
     fi
