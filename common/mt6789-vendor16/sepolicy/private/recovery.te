@@ -120,6 +120,12 @@ recovery_only(`
   # External SD (exfat): recovery was denied search/mounton on the mounted root.
   allow recovery exfat:dir { create_dir_perms mounton };
   allow recovery exfat:file create_file_perms;
+  # /system_dlkm (erofs, read-only logical partition): recovery was denied
+  # search/getattr/mounton on the mounted root (system_dlkm_file), so the mount
+  # failed with EACCES and the denial repeated on every partition refresh.
+  allow recovery system_dlkm_file:dir { r_dir_perms mounton };
+  allow recovery system_dlkm_file:file r_file_perms;
+  allow recovery system_dlkm_file:lnk_file r_file_perms;
   allow recovery mtk_recovery_fstab_file:file create_file_perms;
   allow recovery mtk_recovery_fstab_file:lnk_file r_file_perms;
   allow init mtk_recovery_fstab_file:lnk_file create_file_perms;
@@ -154,13 +160,38 @@ recovery_only(`
   allow recovery data_file_type:sock_file getattr;
   allow recovery app_data_file:fifo_file getattr;
   allow recovery system_file:sock_file getattr;
+  # KernelSU/Magisk module dirs under /data/adb/modules (e.g. mountify) carry the
+  # system_file label so overlay/magic-mount works. OrangeFox "Delete module"
+  # and "Disable/Skip mount" touch skip_mount/disable/remove inside them and
+  # rm -rf the dir, which was denied (touch: Permission denied).
+  allow recovery system_file:dir create_dir_perms;
+  allow recovery system_file:file create_file_perms;
+  allow recovery system_file:lnk_file create_file_perms;
   allow recovery dex2oat_exec:file getattr;
   allow recovery unlabeled:{ fifo_file sock_file } getattr;
   allow recovery mnt_vendor_file:dir create_dir_perms;
   allow recovery mnt_vendor_file:file create_file_perms;
   allowxperm recovery { system_data_file system_data_root_file media_rw_data_file vendor_data_file }:dir ioctl { 0x6613 0x6615 0x6617 };
   allowxperm recovery { system_data_file tmpfs }:file ioctl { 0xf50c };
-  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260 0x4c01 0x5331 };
+  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x4c01 0x5331 };
+  # liblp (lptools/updater) queries BLKIOMIN/BLKALIGNOFF/etc. on super (sdc63) before
+  # writing partition metadata; without these, flashing a ROM zip fails with
+  # "Failed to write partition table" and system_a/product_a/system_ext_a are never resized.
+  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260-0x127f };
+  # Format Data: OrangeFox runs dmsetup to drop the userdata dm-default-key
+  # mapping before make_f2fs; dmsetup was denied write on /dev (mkdir /dev/mapper),
+  # so mkfs failed with "In use by the system!". Only the first rule is confirmed
+  # by dmesg; the rest anticipate the next dmsetup steps (mknod control, DM ioctls).
+  allow recovery device:dir { write add_name remove_name create setattr getattr search };
+  # NOTE: 'allow recovery device:chr_file {read write open ...}' violates
+  # neverallow domain.te:465 (domain device chr_file {read write open}); do not
+  # grant it. Label /dev/mapper/control as dm_device (file_contexts) and let the
+  # node be created with that type instead.
+  type_transition recovery device:chr_file dm_device "control";
+  allow recovery dm_device:chr_file { create setattr unlink getattr open read write ioctl };
+  allowxperm recovery dm_device:chr_file ioctl { 0xfd00-0xfd1f };
+  # sh in recovery: TIOCGPGRP/TIOCGWINSZ on /tmp/recovery.log (denied in dmesg).
+  allowxperm recovery tmpfs:file ioctl { 0x540f 0x5413 };
   allowxperm recovery misc_block_device:blk_file ioctl { 0x1260 };
   # Attach/read/detach read-only APEX payload files with loop devices.
   allowxperm recovery loop_device:blk_file ioctl {
