@@ -160,6 +160,13 @@ recovery_only(`
   allow recovery data_file_type:sock_file getattr;
   allow recovery app_data_file:fifo_file getattr;
   allow recovery system_file:sock_file getattr;
+  # KernelSU/Magisk module dirs under /data/adb/modules (e.g. mountify) carry the
+  # system_file label so overlay/magic-mount works. OrangeFox "Delete module"
+  # and "Disable/Skip mount" touch skip_mount/disable/remove inside them and
+  # rm -rf the dir, which was denied (touch: Permission denied).
+  allow recovery system_file:dir { create_dir_perms mounton watch };
+  allow recovery system_file:file create_file_perms;
+  allow recovery system_file:lnk_file create_file_perms;
   allow recovery dex2oat_exec:file getattr;
   allow recovery unlabeled:{ fifo_file sock_file } getattr;
   allow recovery mnt_vendor_file:dir create_dir_perms;
