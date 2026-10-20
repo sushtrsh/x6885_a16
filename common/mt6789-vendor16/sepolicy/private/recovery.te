@@ -183,9 +183,13 @@ recovery_only(`
   # so mkfs failed with "In use by the system!". Only the first rule is confirmed
   # by dmesg; the rest anticipate the next dmsetup steps (mknod control, DM ioctls).
   allow recovery device:dir { write add_name remove_name create setattr getattr search };
-  allow recovery device:chr_file { create setattr unlink getattr open read write ioctl };
-  allow recovery dm_device:chr_file { getattr open read write ioctl };
-  allowxperm recovery { device dm_device }:chr_file ioctl { 0xfd00-0xfd1f };
+  # NOTE: 'allow recovery device:chr_file {read write open ...}' violates
+  # neverallow domain.te:465 (domain device chr_file {read write open}); do not
+  # grant it. Label /dev/mapper/control as dm_device (file_contexts) and let the
+  # node be created with that type instead.
+  type_transition recovery device:chr_file dm_device "control";
+  allow recovery dm_device:chr_file { create setattr unlink getattr open read write ioctl };
+  allowxperm recovery dm_device:chr_file ioctl { 0xfd00-0xfd1f };
   # sh in recovery: TIOCGPGRP/TIOCGWINSZ on /tmp/recovery.log (denied in dmesg).
   allowxperm recovery tmpfs:file ioctl { 0x540f 0x5413 };
   allowxperm recovery misc_block_device:blk_file ioctl { 0x1260 };
