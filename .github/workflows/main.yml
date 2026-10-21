@@ -23,12 +23,6 @@ on:
         description: 'DEVICE_PATH'
         required: true
         default: 'device/infinix/X6885'
-      COMMON_TREE_URL:
-        description: 'COMMON_TREE_URL (if no common tree, leave blank)'
-        required: false
-      COMMON_PATH:
-        description: 'COMMON_PATH (if no common tree, leave blank)'
-        required: false
       DEVICE_NAME:
         description: 'DEVICE_NAME'
         required: true
@@ -75,7 +69,6 @@ jobs:
       run: |
         sudo apt update && sudo apt upgrade -y
         DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
-            linux-modules-extra-$(uname -r) \
             git python3 tar aria2 patch ccache
         git clone https://gitlab.com/OrangeFox/misc/scripts
         cd scripts
@@ -91,8 +84,7 @@ jobs:
         java-version: '11'
 
     - name: Setup SSH Keys
-      if: ${{ startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') ||
-          startsWith(github.event.inputs.COMMON_TREE_URL, 'git@github.com') }}
+      if: ${{ startsWith(github.event.inputs.DEVICE_TREE_URL, 'git@github.com') }}
       uses: webfactory/ssh-agent@v0.9.0
       with:
           ssh-private-key: |
@@ -110,15 +102,6 @@ jobs:
       run: |
         cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         git clone ${{ github.event.inputs.DEVICE_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.DEVICE_PATH }}
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
-    - name: Clone common tree
-      if: |
-        github.event.inputs.COMMON_TREE_URL != null
-        && github.event.inputs.COMMON_PATH != null
-      run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        git clone ${{ github.event.inputs.COMMON_TREE_URL }} -b ${{ github.event.inputs.DEVICE_TREE_BRANCH }} ./${{ github.event.inputs.COMMON_PATH }}
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Set Swap Space
@@ -160,15 +143,17 @@ jobs:
     - name: Building recovery
       id: build
       run: |
-        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-        set +e
-        source build/envsetup.sh
-        # vendorsetup tree ini nge-apply patch ke source OrangeFox & set FOX_* env
-        source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
-        export ALLOW_MISSING_DEPENDENCIES=true
-        export FOX_USE_ZSTD_BINARY=1
-        set -e
-        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        set -o pipefail
+        {
+          cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+          set +e
+          source build/envsetup.sh
+          source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export FOX_USE_ZSTD_BINARY=1
+          set -e
+          lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        } 2>&1 | tee "${{ steps.pwd.outputs.workspace-folder }}/build.log"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       continue-on-error: true
 
@@ -186,23 +171,29 @@ jobs:
         key: ${{ steps.ccache.outputs.cache-primary-key }}
 
     - name: Check the output directory before uploading
+      if: ${{ !cancelled() }}
       run: |
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/
+        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/ || true
         echo
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/
+        ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/ || true
+        echo
+        ls -al ${{ steps.pwd.outputs.workspace-folder }}/build.log || true
 
     - name: Upload to Release
       id: release
+      if: ${{ !cancelled() }}
       uses: softprops/action-gh-release@v2
       with:
         files: |
           ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox-*.img
+          ${{ steps.pwd.outputs.workspace-folder }}/build.log
         name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
           Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
           Device: ${{ github.event.inputs.DEVICE_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}
+          Build: ${{ steps.build.outcome }} (lihat build.log, cari "[X6885]" untuk status patch)
           Tested on 16.3.0.145SP08
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -224,8 +215,9 @@ jobs:
           TEXT=$(printf '✅ Build selesai\nDevice: %s\nManifest: %s\nTarget: %s\nRelease: %s' \
             "$DEVICE" "$MANIFEST" "$TARGET" "$RELEASE_URL")
         else
-          TEXT=$(printf '❌ Build gagal\nDevice: %s\nLog: %s' "$DEVICE" "$RUN_URL")
+          TEXT=$(printf '❌ Build gagal\nDevice: %s\nLog: %s\nRelease (build.log): %s' "$DEVICE" "$RUN_URL" "$RELEASE_URL")
         fi
         curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
           --data-urlencode "chat_id=${CHAT_ID}" \
           --data-urlencode "text=${TEXT}"
+          
