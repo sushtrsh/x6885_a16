@@ -1,0 +1,126 @@
+--- a/build/make/core/config.mk
++++ b/build/make/core/config.mk
+@@ -681,6 +681,7 @@
+ MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ MINIGZIP := $(GZIP)
+ LZ4 := $(HOST_OUT_EXECUTABLES)/lz4$(HOST_EXECUTABLE_SUFFIX)
++ZSTD_RAMDISK := $(HOST_OUT_EXECUTABLES)/ramdisk_zstd$(HOST_EXECUTABLE_SUFFIX)
+ LZMA := prebuilts/tools-lineage/linux-x86/bin/lzma
+ ifeq (,$(strip $(BOARD_CUSTOM_MKBOOTIMG)))
+ MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
+--- a/build/make/core/Makefile
++++ b/build/make/core/Makefile
+@@ -342,6 +342,9 @@
+   INTERNAL_VENDOR_RAMDISK_FRAGMENTS += recovery
+   VENDOR_RAMDISK_FRAGMENT.recovery.STAGING_DIR := $(TARGET_RECOVERY_ROOT_OUT)
+   VENDOR_RAMDISK_FRAGMENT.recovery.FILES := $(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP)
++  ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++    VENDOR_RAMDISK_FRAGMENT.recovery.FILES += $(PRODUCT_OUT)/ramdisk-recovery.cpio
++  endif
+   BOARD_VENDOR_RAMDISK_FRAGMENT.recovery.MKBOOTIMG_ARGS += --ramdisk_type RECOVERY
+   .KATI_READONLY := VENDOR_RAMDISK_FRAGMENT.recovery.STAGING_DIR
+ endif
+@@ -1198,7 +1201,11 @@
+ endif
+ 
+ 
+-ifeq ($(BOARD_RAMDISK_USE_LZ4),true)
++ifeq ($(BOARD_RAMDISK_USE_ZSTD),true)
++COMPRESSION_COMMAND_DEPS := $(ZSTD_RAMDISK)
++COMPRESSION_COMMAND := $(ZSTD_RAMDISK) -q -19 --no-check -c
++RAMDISK_EXT := .zst
++else ifeq ($(BOARD_RAMDISK_USE_LZ4),true)
+ # -l enables the legacy format used by the Linux kernel
+ COMPRESSION_COMMAND_DEPS := $(LZ4)
+ COMPRESSION_COMMAND := $(LZ4) -l -12 --favor-decSpeed
+@@ -1599,7 +1606,18 @@
+ endif
+ endif
+ 
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++$(INTERNAL_VENDOR_RAMDISK_TARGET): PRIVATE_BOOTSTRAP_DIRS := debug_ramdisk dev metadata mnt proc second_stage_resources sys system/bin
++$(INTERNAL_VENDOR_RAMDISK_TARGET): $(TARGET_RAMDISK_OUT)/init
++endif
++
+ $(INTERNAL_VENDOR_RAMDISK_TARGET): $(MKBOOTFS) $(INTERNAL_VENDOR_RAMDISK_FILES) | $(COMPRESSION_COMMAND_DEPS)
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++	$(hide) mkdir -p $(addprefix $(TARGET_VENDOR_RAMDISK_OUT)/,$(PRIVATE_BOOTSTRAP_DIRS))
++	$(hide) cp -fp $(TARGET_RAMDISK_OUT)/init $(TARGET_VENDOR_RAMDISK_OUT)/system/bin/init
++	$(hide) chmod 0755 $(TARGET_VENDOR_RAMDISK_OUT)/system/bin/init
++	$(hide) ln -sfn /system/bin/init $(TARGET_VENDOR_RAMDISK_OUT)/init
++endif
+ 	$(MKBOOTFS) -d $(TARGET_OUT) $(TARGET_VENDOR_RAMDISK_OUT) $(PRIVATE_ADDITIONAL_DIR) | $(COMPRESSION_COMMAND) > $@
+ 
+ INSTALLED_VENDOR_RAMDISK_TARGET := $(PRODUCT_OUT)/vendor_ramdisk.img
+@@ -1735,6 +1753,7 @@
+   	BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT=$(BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT) \
+   	BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT=$(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT) \
+   	ORANGEFOX_CALLING_CARD="1.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9 - vendor_boot
+@@ -2798,6 +2817,7 @@
+   	BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT=$(BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT) \
+   	BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT=$(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT) \
+   	ORANGEFOX_CALLING_CARD="2.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9
+@@ -2823,6 +2843,9 @@
+ 	ln -sf prop.default $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+ 
+ 	# Silence warnings in first_stage_console.
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++	$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/lib/modules/*.ko $(TARGET_RECOVERY_ROOT_OUT)/lib/modules/modules.*
++endif
+ 	touch $(TARGET_RECOVERY_ROOT_OUT)/linkerconfig/ld.config.txt
+ 	cd $(TARGET_RECOVERY_ROOT_OUT) && touch ramdisk-files.txt && touch ramdisk-files.sha256sum && find . | sed "s/.\///" > ramdisk-files.txt
+ 	cd $(TARGET_RECOVERY_ROOT_OUT) && find -type f | sed "s/.\/ramdisk-files.sha256sum//" | sed "/prop.default/d" | xargs sha256sum > ramdisk-files.sha256sum
+@@ -2909,6 +2932,7 @@
+   	BOARD_USES_RECOVERY_AS_BOOT=$(BOARD_USES_RECOVERY_AS_BOOT) \
+   	INTERNAL_KERNEL_CMDLINE="$(INTERNAL_KERNEL_CMDLINE)" \
+   	ORANGEFOX_CALLING_CARD="3.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9
+@@ -2976,6 +3000,7 @@
+   	BOARD_USES_RECOVERY_AS_BOOT=$(BOARD_USES_RECOVERY_AS_BOOT) \
+   	INTERNAL_KERNEL_CMDLINE="$(INTERNAL_KERNEL_CMDLINE)" \
+   	ORANGEFOX_CALLING_CARD="4.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ endif
+--- a/external/zstd/Android.bp
++++ b/external/zstd/Android.bp
+@@ -248,3 +248,12 @@
+         "tests/fuzz/zstd_frame_info.c",
+     ],
+ }
++
++cc_binary_host {
++    name: "ramdisk_zstd",
++    srcs: ["programs/*.c"],
++    local_include_dirs: ["lib", "lib/common", "programs"],
++    static_libs: ["libzstd"],
++    cflags: ["-Wno-unused-parameter"],
++    stl: "none",
++}
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
+@@ -582,7 +582,11 @@
+ 	fi
+      fi
+ 
+-     $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     if [ -n "$recovery_uncompressed_ramdisk" ] && [ -f "$recovery_uncompressed_ramdisk" ]; then
++        $CP -p "$recovery_uncompressed_ramdisk" "$VBtmp/vendor_ramdisk_recovery.cpio" || abort 203
++     else
++        $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     fi
+      F="vendor_ramdisk_recovery.cpio"; #v4+ header
+      [ ! -f $F ] && F="vendor_ramdisk/recovery.cpio"; #v4+ header+latest magiskboot canary
+      [ ! -f $F ] && F="ramdisk.cpio"; #v3 or earlier header

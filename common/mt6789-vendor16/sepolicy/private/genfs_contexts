@@ -1,0 +1,9 @@
+recovery_only(`
+  genfscon proc /bootprof u:object_r:mtk_recovery_proc_bootprof:s0
+  genfscon proc /partitions u:object_r:mtk_recovery_proc_partitions:s0
+  genfscon sysfs /module/musb_hdrc/parameters/kernel_init_done u:object_r:mtk_recovery_sysfs_control:s0
+  genfscon sysfs /module/block/parameters/events_dfl_poll_msecs u:object_r:mtk_recovery_sysfs_control:s0
+  genfscon sysfs /devices/platform/soc/soc:mtk-leds u:object_r:sysfs_leds:s0
+  genfscon sysfs /devices/platform/soc/soc:regulator-vibrator/leds/vibrator u:object_r:sysfs_leds:s0
+  genfscon sysfs /devices/platform/soc/mt_usb/saving u:object_r:mtk_recovery_sysfs_control:s0
+')

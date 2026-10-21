@@ -1,0 +1,123 @@
+--- a/system/vold/Decrypt.cpp
++++ b/system/vold/Decrypt.cpp
+@@ -93,7 +93,6 @@
+ 
+ using ::aidl::android::hardware::security::keymint::HardwareAuthenticatorType;
+ using ::aidl::android::hardware::security::keymint::HardwareAuthToken;
+-using ::aidl::android::hardware::security::keymint::km_utils::authToken2AidlVec;
+ using aidl::android::system::keystore2::IKeystoreService;
+ using android::security::keymaster::OperationResult;
+ using android::hardware::keymaster::V4_1::support::blob2hidlVec;
+@@ -571,6 +570,10 @@
+ 			ks2::KeyEntryResponse keyEntryResponse;
+ 			::ndk::SpAIBinder keystoreBinder(AServiceManager_checkService("android.system.keystore2.IKeystoreService/default"));
+ 			auto keystore = ks2::IKeystoreService::fromBinder(keystoreBinder);
++			if (!keystore) {
++				printf("Could not connect to keystore2 service\n");
++				return disk_decryption_secret_key;
++			}
+ 			auto rc = keystore->getKeyEntry(keyDescriptor(keystore_alias), &keyEntryResponse);
+ 			if (!rc.isOk()) {
+ 				auto error = unwrapError(rc);
+@@ -588,7 +591,7 @@
+ 				keyResponse.metadata.key, begin_params.vector_data(), true,
+ 				&encOperationResponse);
+ 			if (!begin_rc.isOk()) {
+-				printf("Begin Operation failed\n");
++				printf("Begin Operation failed: %s\n", begin_rc.getDescription().c_str());
+ 				return disk_decryption_secret_key;
+ 			}
+ 			std::optional<std::vector<uint8_t>> optPlaintext;
+@@ -844,6 +847,7 @@
+ 			}
+ 
+ 			GKResponse gkResponse;
++			HardwareAuthToken authToken;
+ 			if (aidl_gk_device) {
+ 				if (pwd.handle_len <= 0) {
+ 					printf("no password handle supplied\n");
+@@ -862,10 +866,15 @@
+ 				auto result = aidl_gk_device->verify(fakeUid(user_id), 0 /* challenge */, pwd_handle_hidl, gk_pwd_token_hidl, &rsp);
+ 				free(gk_pwd_token);
+ 
++				if (!result.isOk()) {
++					printf("Gatekeeper AIDL verify failed: %s\n", result.getDescription().c_str());
++					return Free_Return(retval, weaver_key, &pwd);
++				}
+ 				if (rsp.statusCode >= AidlIGatekeeper::STATUS_OK) {
+-					// Serialize HardwareAuthToken to a vector as hw_auth_token_t.
+ 					printf("GateKeeper status ok\n");
+-					gkResponse = GKResponse::ok(authToken2AidlVec(rsp.hardwareAuthToken));
++					// AIDL already uses the KeyMint token type. Preserve its fields directly.
++					authToken = rsp.hardwareAuthToken;
++					gkResponse = GKResponse::ok({});
+ 				} else if (rsp.statusCode == AidlIGatekeeper::ERROR_RETRY_TIMEOUT) {
+ 					printf("GateKeeper response timeout\n");
+ 					gkResponse = GKResponse::retry(rsp.timeoutMs);
+@@ -919,28 +928,45 @@
+ 					return Free_Return(retval, weaver_key, &pwd);
+ 				}
+ 			}
+-			if (gkResponse.response_code() == GKResponseCode::OK) {
+-				if (gkResponse.payload().size() != 0) {
+-					const hw_auth_token_t* hwAuthToken =
+-						reinterpret_cast<const hw_auth_token_t*>(gkResponse.payload().data());
+-					HardwareAuthToken authToken;
+-					authToken.timestamp.milliSeconds = betoh64(hwAuthToken->timestamp);
+-					authToken.challenge = hwAuthToken->challenge;
+-					authToken.userId = hwAuthToken->user_id;
+-					authToken.authenticatorId = hwAuthToken->authenticator_id;
+-					authToken.authenticatorType = static_cast<HardwareAuthenticatorType>(
+-							betoh32(hwAuthToken->authenticator_type));
+-					authToken.mac.assign(&hwAuthToken->hmac[0], &hwAuthToken->hmac[32]);
+-					AIBinder* authzAIBinder = AServiceManager_getService("android.security.authorization");
+-					::ndk::SpAIBinder binder(authzAIBinder);
+-					auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
+-					if (service == NULL) {
+-						printf("error: could not connect to keystore service\n");
+-						ALOGE("error: could not connect to keystore service\n");
+-					}
+-					auto binder_result = service->addAuthToken(authToken);
++			if (gkResponse.response_code() != GKResponseCode::OK) {
++				printf("Gatekeeper did not verify the credential\n");
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			if (!aidl_gk_device) {
++				const auto& payload = gkResponse.payload();
++				if (payload.size() != sizeof(hw_auth_token_t)) {
++					printf("Gatekeeper HIDL returned an invalid auth token size: %zu\n", payload.size());
++					return Free_Return(retval, weaver_key, &pwd);
+ 				}
+-			}
++				hw_auth_token_t hwAuthToken;
++				memcpy(&hwAuthToken, payload.data(), sizeof(hwAuthToken));
++				authToken.timestamp.milliSeconds = betoh64(hwAuthToken.timestamp);
++				authToken.challenge = hwAuthToken.challenge;
++				authToken.userId = hwAuthToken.user_id;
++				authToken.authenticatorId = hwAuthToken.authenticator_id;
++				authToken.authenticatorType = static_cast<HardwareAuthenticatorType>(
++						betoh32(hwAuthToken.authenticator_type));
++				authToken.mac.assign(&hwAuthToken.hmac[0], &hwAuthToken.hmac[32]);
++			}
++			if (authToken.mac.size() != 32) {
++				printf("Gatekeeper returned an invalid auth token MAC size: %zu\n", authToken.mac.size());
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			// Report only token shape, never its MAC, SID, challenge, or timestamp.
++			printf("Gatekeeper auth token ready (authType=%d, MAC bytes=%zu)\n",
++					static_cast<int32_t>(authToken.authenticatorType), authToken.mac.size());
++			::ndk::SpAIBinder binder(AServiceManager_getService("android.security.authorization"));
++			auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
++			if (!service) {
++				printf("Could not connect to keystore authorization service\n");
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			auto binder_result = service->addAuthToken(authToken);
++			if (!binder_result.isOk()) {
++				printf("Keystore addAuthToken failed: %s\n", binder_result.getDescription().c_str());
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			printf("Gatekeeper auth token accepted by keystore\n");
+ 
+ 		}
+ 	}

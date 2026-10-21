@@ -1,0 +1,179 @@
+--- a/bootable/recovery/etc/init.rc
++++ b/bootable/recovery/etc/init.rc
+@@ -39,7 +39,6 @@
+     symlink /proc/self/fd/2 /dev/stderr
+ 
+     symlink /system/bin /bin
+-    symlink /system/etc /etc
+ 
+     mount cgroup none /acct cpuacct
+     mkdir /acct/uid
+@@ -54,6 +53,14 @@
+ 
+     chown root shell /tmp
+     chmod 0775 /tmp
++
++    rm /etc
++    # Create the mountpoint with its parent label; /etc becomes tmpfs after mount.
++    exec u:r:recovery:s0 root root -- /system/bin/toybox mkdir -m 0755 /etc
++    mount tmpfs tmpfs /etc mode=0755
++    restorecon /etc
++    exec u:r:recovery:s0 root root -- /system/bin/toybox cp -pR /system/etc/. /etc/
++    restorecon /etc/recovery.fstab /etc/task_profiles.json /etc/cgroups.json
+     mkdir /tmp/misc
+     mkdir /tmp/misc/keystore/
+ 
+--- a/bootable/recovery/orangefox.hpp
++++ b/bootable/recovery/orangefox.hpp
+@@ -28,7 +28,7 @@
+ #define OTA_ERROR "INSTALL_ERROR"
+ #define OTA_VERIFY_FAIL "INSTALL_VERIFY_FAILURE"
+ #define OTA_SUCCESS "INSTALL_SUCCESS"
+-#define FOX_TMP_PATH "/foxtmpfile"
++#define FOX_TMP_PATH "/tmp/foxtmpfile"
+ 
+ // global variables
+ static bool zip_is_for_specific_build = false;
+--- a/bootable/recovery/twrp-functions.cpp
++++ b/bootable/recovery/twrp-functions.cpp
+@@ -2784,8 +2784,6 @@
+ 
+   OrangeFox_Startup_Executed++;
+ 
+-  if (TWFunc::Path_Exists(FOX_PS_BIN)) 
+-      chmod (FOX_PS_BIN, 0755);
+   
+   Fox_Current_ROM = "";
+   
+--- a/vendor/recovery/FoxExtras/sbin/foxstart.sh
++++ b/vendor/recovery/FoxExtras/sbin/foxstart.sh
+@@ -38,7 +38,7 @@
+ ANDROID_SDK="31"  # assume at least Android 12 in sdk checks
+ MOUNT_CMD="mount -r" # only mount in readonly mode
+ SUPER="0" # whether the device has a "super" partition
+-OUR_TMP="/FFiles/temp" # our "safe" temp directory
++OUR_TMP="/tmp/fox" # our "safe" temp directory
+ 
+ # whether this is a vAB or vanilla build
+ VIRTUAL_AB=$(getprop "ro.orangefox.virtual_ab")
+@@ -531,7 +531,10 @@
+    local rc=$ETC_DIR/bash/bashrc
+    [ ! -f $rc ] && rc=$ETC_DIR/bashrc
+    [ ! -f $rc ] && rc=$ETC_DIR/bash.bashrc
+-   [ -f $rc ] && cp $rc /.bashrc
++   if [ -f "$rc" ]; then
++     cp "$rc" /tmp/fox.bashrc
++     [ -L /.bashrc ] || ln -s /tmp/fox.bashrc /.bashrc
++   fi
+ }
+ 
+ # try to get display panel information
+@@ -567,19 +570,14 @@
+ 
+ # post-init stuff
+ post_init() {
+-  local M="/FFiles/magiskboot_new"
+-  [ -f $M ] && chmod 0755 $M
+-  M="/FFiles/fox_fix_date"
+-  [ -f $M ] && chmod 0755 $M
+-
+   # write OrangeFox props to the log
+   echo "DEBUG: OrangeFox: Fox properties:" >> $LOG
+   getprop | grep 'orangefox' >> $LOG
+ 
+   # use new magisk uninstall zip for saving space
+   local MZ="/FFiles/OF_Magisk/Magisk.zip"
+-  if [ -e $MZ ]; then
+-     cp $MZ /FFiles/OF_Magisk/uninstall.zip
++  if [ -e "$MZ" ] && [ ! -e /FFiles/OF_Magisk/uninstall.zip ]; then
++     ln -s "$MZ" /FFiles/OF_Magisk/uninstall.zip
+   fi
+ }
+ 
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
+@@ -1258,7 +1258,21 @@
+   # build standard (3GB) version
+   # copy over vendor FFiles/ and vendor sbin/ stuff before creating the boot image
+   #[ "$FOX_BUILD_DEBUG_MESSAGES" = "1" ] && echo "- FOX_BUILD_DEBUG_MESSAGES: Copying: $FOX_VENDOR_PATH/FoxExtras/* to $FOX_RAMDISK/"
++  for fox_helper in fox_fix_date ps magiskboot_new; do
++    [ ! -L "$FOX_RAMDISK/FFiles/$fox_helper" ] || rm -f "$FOX_RAMDISK/FFiles/$fox_helper"
++  done
+   $CP -pr $FOX_VENDOR_PATH/FoxExtras/* $FOX_RAMDISK/
++  mkdir -p "$FOX_RAMDISK/$RAMDISK_SBIN"
++  for fox_helper in fox_fix_date magiskboot_new; do
++    [ -f "$FOX_RAMDISK/FFiles/$fox_helper" ] || continue
++    fox_helper_bin="$fox_helper"
++    mv -f "$FOX_RAMDISK/FFiles/$fox_helper" "$FOX_RAMDISK/$RAMDISK_SBIN/$fox_helper_bin"
++    chmod 0755 "$FOX_RAMDISK/$RAMDISK_SBIN/$fox_helper_bin"
++    ln -s "/${RAMDISK_SBIN#/}/$fox_helper_bin" "$FOX_RAMDISK/FFiles/$fox_helper"
++  done
++  rm -f "$FOX_RAMDISK/FFiles/ps" "$FOX_RAMDISK/$RAMDISK_SBIN/fox_ps"
++  ln -s /system/bin/ps "$FOX_RAMDISK/FFiles/ps"
++  unset fox_helper fox_helper_bin
+ 
+   # if these directories don't already exist
+   mkdir -p $FOX_RAMDISK/$RAMDISK_ETC/
+--- a/system/sepolicy/private/file_contexts
++++ b/system/sepolicy/private/file_contexts
+@@ -52,7 +52,7 @@
+ /proc               u:object_r:rootfs:s0
+ /second_stage_resources u:object_r:tmpfs:s0
+ /sys                u:object_r:sysfs:s0
+-/apex               u:object_r:apex_mnt_dir:s0
++# Recovery device policy labels its installer /apex mountpoint.
+ /bootstrap-apex     u:object_r:apex_mnt_dir:s0
+ /tmp                u:object_r:shell_data_file:s0
+ 
+@@ -67,7 +67,7 @@
+ /bugreports         u:object_r:rootfs:s0
+ /charger            u:object_r:rootfs:s0
+ /d                  u:object_r:rootfs:s0
+-/etc                u:object_r:rootfs:s0
++/etc             -l u:object_r:rootfs:s0
+ /sdcard             u:object_r:rootfs:s0
+ 
+ # SELinux policy files
+--- a/build/make/core/Makefile
++++ b/build/make/core/Makefile
+@@ -2773,7 +2773,7 @@
+   RECOVERYIMAGE_EXTRA_DEPS    := $(INSTALLED_DTIMAGE_TARGET)
+ endif
+ 
+-$(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP): $(MKBOOTFS) \
++$(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP): $(MKBOOTFS) $(FOX_VENDOR) \
+ 	    $(INTERNAL_ROOT_FILES) \
+ 	    $(INSTALLED_RAMDISK_TARGET) \
+ 	    $(INTERNAL_RECOVERYIMAGE_FILES) \
+--- a/bootable/recovery/twrpinstall/adb_install.cpp
++++ b/bootable/recovery/twrpinstall/adb_install.cpp
+@@ -42,6 +42,7 @@
+ #include <android-base/properties.h>
+ #include <android-base/strings.h>
+ #include <android-base/unique_fd.h>
++#include <android-base/scopeguard.h>
+ 
+ #include "fuse_sideload.h"
+ #include "twinstall/install.h"
+@@ -282,7 +283,12 @@
+ static void CreateMinadbdServiceAndExecuteCommands(
+     const std::map<MinadbdCommand, CommandFunction>& command_map,
+     bool rescue_mode __unused, std::string install_file __unused) {
+-  signal(SIGPIPE, SIG_IGN);
++  const auto saved_sigpipe_handler = signal(SIGPIPE, SIG_IGN);
++  auto restore_sigpipe = android::base::make_scope_guard([saved_sigpipe_handler] {
++    if (saved_sigpipe_handler != SIG_ERR) {
++      signal(SIGPIPE, saved_sigpipe_handler);
++    }
++  });
+ 
+   android::base::unique_fd recovery_socket;
+   android::base::unique_fd minadbd_socket;
+@@ -336,7 +342,6 @@
+     }
+   }
+ 
+-  signal(SIGPIPE, SIG_DFL);
+ }
+ 
+   int twrp_sideload(const char* install_file, Device::BuiltinAction* reboot_action) {

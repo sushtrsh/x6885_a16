@@ -1,0 +1,15 @@
+--- a/bootable/recovery/openrecoveryscript.cpp
++++ b/bootable/recovery/openrecoveryscript.cpp
+@@ -423,11 +423,9 @@
+ 					if (ret_val == -2)
+ 						gui_err("need_new_adb=You need adb 1.0.32 or newer to sideload to this device.");
+ 					ret_val = 1; // failure
+-				} else if (TWinstall_zip(FUSE_SIDELOAD_HOST_PATHNAME, &wipe_cache) == 0) {
++				} else {
+ 					if (wipe_cache)
+ 						PartitionManager.Wipe_By_Path("/cache");
+-				} else {
+-					ret_val = 1; // failure
+ 				}
+ 				PartitionManager.Unlock_Block_Partitions();
+ 				PartitionManager.Update_System_Details();

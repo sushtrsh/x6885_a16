@@ -1,0 +1,10 @@
+--- a/hardware/interfaces/health/aidl/default/Android.bp
++++ b/hardware/interfaces/health/aidl/default/Android.bp
+@@ -134,7 +134,6 @@ cc_defaults {
+ cc_defaults {
+     name: "android.hardware.health-service.example-defaults",
+     relative_install_path: "hw",
+-    vintf_fragments: ["android.hardware.health-service.example.xml"],
+     defaults: [
+         "libhealth_aidl_impl_user",
+     ],
