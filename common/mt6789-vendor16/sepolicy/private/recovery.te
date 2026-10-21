@@ -183,6 +183,8 @@ recovery_only(`
   # so mkfs failed with "In use by the system!". Only the first rule is confirmed
   # by dmesg; the rest anticipate the next dmsetup steps (mknod control, DM ioctls).
   allow recovery device:dir { write add_name remove_name create setattr getattr search };
+  # mknod /dev/mapper/control by dmsetup failed with EPERM in recovery.log: missing CAP_MKNOD.
+  allow recovery self:global_capability_class_set mknod;
   # NOTE: granting read/write/open on device:chr_file violates
   # neverallow domain.te:465 (domain device chr_file {read write open}); do not
   # grant it. Label /dev/mapper/control as dm_device (file_contexts) and let the
