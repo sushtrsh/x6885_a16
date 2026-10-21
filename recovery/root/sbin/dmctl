@@ -1,0 +1,16 @@
+#!/system/bin/sh
+# Wrapper: lepas semua mount di atas dm userdata sebelum dmctl delete
+if [ "$1" = "delete" ] && [ "$2" = "userdata" ]; then
+    list=""
+    while read dev mp rest; do
+        case "$dev" in
+            /dev/block/dm-*|/dev/block/mapper/userdata) list="$mp $list" ;;
+        esac
+    done < /proc/mounts
+    # list sudah terbalik (anak dulu, induk belakangan)
+    for mp in $list /data/user/0 /data/media/0 /data; do
+        umount "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null
+    done
+    sync
+fi
+exec /system/bin/dmctl "$@"
