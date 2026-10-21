@@ -7,6 +7,9 @@ on init
     restorecon /sys/devices/platform/soc/mt_usb/saving
     # Generated mount fstab lives on writable recovery tmpfs.
     symlink /tmp/fstab /etc/fstab
+    # dmsetup (Format Data) cannot mknod in recovery; point its control node at the real one.
+    mkdir /dev/mapper 0755 root root
+    symlink /dev/device-mapper /dev/mapper/control
     insmod /lib/modules/touch/adaptive-ts.ko
     insmod /lib/modules/touch/focaltech_ft3683g.ko
     insmod /lib/modules/touch/chipsemi_chsc5xxx_old.ko
