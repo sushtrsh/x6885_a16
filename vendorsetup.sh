@@ -30,7 +30,6 @@ patch_files=(
     "${device_dir}/patches/07-patch-sideload-install-once.patch"
     "${device_dir}/patches/08-patch-enforcing-runtime.patch"
     "${device_dir}/patches/09-patch-data-f2fs-fstab.patch"
-    "${device_dir}/patches/10-patch-format-data-unmount-submounts.patch"
 )
 
 export ALLOW_MISSING_DEPENDENCIES=true
