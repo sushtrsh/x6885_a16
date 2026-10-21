@@ -33,6 +33,3 @@
 /etc/cgroups\.json u:object_r:mtk_recovery_cgroup_desc_file:s0
 /apex -d u:object_r:mtk_recovery_apex_dir:s0
 /kmsg -c u:object_r:kmsg_device:s0
-
-# dmsetup (Format Data) creates this node; keep it off the generic "device" label (neverallow domain.te:465).
-/dev/mapper/control u:object_r:dm_device:s0
