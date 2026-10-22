@@ -17,7 +17,6 @@ on init
 	setprop sys.usb.configfs 1
 	setprop sys.usb.controller "musb-hdrc"
 	setprop crypto.ready 1
-    chmod 0755 /sbin/dmctl
 
 	start vendor.boot-default
 	
