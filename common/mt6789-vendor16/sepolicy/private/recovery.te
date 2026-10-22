@@ -12,7 +12,7 @@ type mtk_recovery_ufs_boot_device, dev_type;
 type mtk_recovery_ufs_bsg_device, dev_type;
 type mtk_recovery_gatekeeper_state_file, file_type;
 # BARU: tipe properti untuk ctl.stop gatekeeper/keymint
-type mtk_recovery_ctl_stop_prop, property_type;
+system_internal_prop(mtk_recovery_ctl_stop_prop)
 
 # MT6789 Android 16 custom recovery. Android's normal-boot policy is unchanged.
 # Rules are evaluated only for the source-built recovery policy.

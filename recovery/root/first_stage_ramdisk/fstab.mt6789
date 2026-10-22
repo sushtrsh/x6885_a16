@@ -175,8 +175,8 @@ tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb
 tr_misc /tr_misc erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 tr_misc /tr_misc ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 
-tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 
 /mnt/vendor/tr_manifest /tr_manifest none ro,bind wait,nofail
 

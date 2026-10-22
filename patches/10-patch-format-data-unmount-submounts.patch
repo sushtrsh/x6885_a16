@@ -1,0 +1,28 @@
+--- a/bootable/recovery/partition.cpp
++++ b/bootable/recovery/partition.cpp
+@@ -1078,6 +1078,13 @@
+ 	if (Is_Storage && !Removable)
+ 		PartitionManager.Remove_Storage(Mount_Point);
+ 
++	if (Actual_Mount_Point == "/data") {
++		TWFunc::Exec_Cmd("umount -f /data/user/0");
++		TWFunc::Exec_Cmd("umount -l /data/user/0");
++		TWFunc::Exec_Cmd("umount -f /data/media/0");
++		TWFunc::Exec_Cmd("umount -l /data/media/0");
++	}
++
+ 	int check = umount(Actual_Mount_Point.c_str());
+ 	if (check != 0) {
+ 		LOGINFO("DEBUG: attempting again to unmount '%s'\n", Actual_Mount_Point.c_str());
+@@ -2319,6 +2326,13 @@
+ #ifdef OF_USE_DMCTL
+ 	LOGINFO("OrangeFox: running dmctl before formatting...\n");
++	TWFunc::Exec_Cmd("umount -f /data/user/0");
++	TWFunc::Exec_Cmd("umount -l /data/user/0");
++	TWFunc::Exec_Cmd("umount -f /data/media/0");
++	TWFunc::Exec_Cmd("umount -l /data/media/0");
++	TWFunc::Exec_Cmd("umount -f /data");
++	TWFunc::Exec_Cmd("umount -l /data");
++	sync();
+ 	TWFunc::Exec_Cmd("dmctl delete userdata");
+ #endif
