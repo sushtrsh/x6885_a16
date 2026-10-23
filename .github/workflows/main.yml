@@ -143,17 +143,14 @@ jobs:
     - name: Building recovery
       id: build
       run: |
-        set -o pipefail
-        {
-          cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
-          set +e
-          source build/envsetup.sh
-          source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
-          export ALLOW_MISSING_DEPENDENCIES=true
-          export FOX_USE_ZSTD_BINARY=1
-          set -e
-          lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
-        } 2>&1 | tee "${{ steps.pwd.outputs.workspace-folder }}/build.log"
+        cd ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
+        set +e
+        source build/envsetup.sh
+        source ${{ github.event.inputs.DEVICE_PATH }}/vendorsetup.sh
+        export ALLOW_MISSING_DEPENDENCIES=true
+        export FOX_USE_ZSTD_BINARY=1
+        set -e
+        lunch ${{ github.event.inputs.MAKEFILE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       continue-on-error: true
 
@@ -176,8 +173,6 @@ jobs:
         ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/ || true
         echo
         ls -al ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/ || true
-        echo
-        ls -al ${{ steps.pwd.outputs.workspace-folder }}/build.log || true
 
     - name: Upload to Release
       id: release
@@ -186,14 +181,13 @@ jobs:
       with:
         files: |
           ${{ steps.pwd.outputs.workspace-folder }}/fox_${{ github.event.inputs.MANIFEST_BRANCH }}/out/target/product/${{ github.event.inputs.DEVICE_NAME }}/OrangeFox-*.img
-          ${{ steps.pwd.outputs.workspace-folder }}/build.log
         name: ${{ github.event.inputs.DEVICE_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
           Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
           Device: ${{ github.event.inputs.DEVICE_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}
-          Build: ${{ steps.build.outcome }} (lihat build.log, cari "[X6885]" untuk status patch)
+          Build: ${{ steps.build.outcome }}
           Tested on 16.3.0.145SP08
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -215,9 +209,8 @@ jobs:
           TEXT=$(printf '✅ Build selesai\nDevice: %s\nManifest: %s\nTarget: %s\nRelease: %s' \
             "$DEVICE" "$MANIFEST" "$TARGET" "$RELEASE_URL")
         else
-          TEXT=$(printf '❌ Build gagal\nDevice: %s\nLog: %s\nRelease (build.log): %s' "$DEVICE" "$RUN_URL" "$RELEASE_URL")
+          TEXT=$(printf '❌ Build gagal\nDevice: %s\nLog: %s' "$DEVICE" "$RUN_URL")
         fi
         curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
           --data-urlencode "chat_id=${CHAT_ID}" \
           --data-urlencode "text=${TEXT}"
-          
