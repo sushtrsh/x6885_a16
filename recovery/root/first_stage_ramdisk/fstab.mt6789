@@ -160,25 +160,25 @@ system_dlkm /system_dlkm ext4 ro wait,slotselect,logical,first_stage_mount
 
 
 
-tr_region /tr_region erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_region /tr_region ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_company /tr_company erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_company /tr_company ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_carrier /tr_carrier erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_carrier /tr_carrier ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_product /tr_product erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_product /tr_product ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_preload /tr_preload erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_preload /tr_preload ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_overlayfs /tr_overlayfs erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_misc /tr_misc erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_misc /tr_misc ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+tr_region /tr_region erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_region /tr_region ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_company /tr_company erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_company /tr_company ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_carrier /tr_carrier erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_carrier /tr_carrier ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_product /tr_product erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_product /tr_product ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_preload /tr_preload erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_preload /tr_preload ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_overlayfs /tr_overlayfs erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_misc /tr_misc erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_misc /tr_misc ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 
-tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
-tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 
-/mnt/vendor/tr_manifest /tr_manifest none ro,bind wait
+/mnt/vendor/tr_manifest /tr_manifest none ro,bind wait,nofail
 
 
 
