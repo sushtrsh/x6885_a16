@@ -1,28 +1,17 @@
---- a/bootable/recovery/partition.cpp
-+++ b/bootable/recovery/partition.cpp
-@@ -1078,6 +1078,13 @@
- 	if (Is_Storage && !Removable)
- 		PartitionManager.Remove_Storage(Mount_Point);
+--- a/bootable/recovery/partition.cpp	2026-10-29 05:33:00.428850396 +0000
++++ b/bootable/recovery/partition.cpp	2026-10-29 05:33:00.514094321 +0000
+@@ -1807,6 +1807,14 @@
+ 		if (!Symlink_Mount_Point.empty())
+ 			umount2(Symlink_Mount_Point.c_str(), flags);
  
-+	if (Actual_Mount_Point == "/data") {
-+		TWFunc::Exec_Cmd("umount -f /data/user/0");
-+		TWFunc::Exec_Cmd("umount -l /data/user/0");
-+		TWFunc::Exec_Cmd("umount -f /data/media/0");
-+		TWFunc::Exec_Cmd("umount -l /data/media/0");
-+	}
++		// [X6885] /data/user/0 is a separate mount while /data is decrypted; unmount it first,
++		// otherwise umount2(/data) fails with EBUSY and only the lazy fallback detaches it
++		// (the device then stays busy for dmctl/make_f2fs).
++		if (Mount_Point == "/data") {
++			if (umount2("/data/user/0", flags) != 0 && errno == EBUSY)
++				umount2("/data/user/0", MNT_DETACH);
++		}
 +
- 	int check = umount(Actual_Mount_Point.c_str());
- 	if (check != 0) {
- 		LOGINFO("DEBUG: attempting again to unmount '%s'\n", Actual_Mount_Point.c_str());
-@@ -2319,6 +2326,13 @@
- #ifdef OF_USE_DMCTL
- 	LOGINFO("OrangeFox: running dmctl before formatting...\n");
-+	TWFunc::Exec_Cmd("umount -f /data/user/0");
-+	TWFunc::Exec_Cmd("umount -l /data/user/0");
-+	TWFunc::Exec_Cmd("umount -f /data/media/0");
-+	TWFunc::Exec_Cmd("umount -l /data/media/0");
-+	TWFunc::Exec_Cmd("umount -f /data");
-+	TWFunc::Exec_Cmd("umount -l /data");
-+	sync();
- 	TWFunc::Exec_Cmd("dmctl delete userdata");
- #endif
+ 		umount2(Mount_Point.c_str(), flags);
+ 		if (Is_Mounted()) {
+ 			if (Mount_Point == "/data" || Mount_Point == "/sdcard" || Mount_Point == "/data/media/0") {

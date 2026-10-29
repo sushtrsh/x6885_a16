@@ -1,0 +1,21 @@
+--- a/system/sepolicy/private/lpdumpd.te	2026-10-29 04:08:44.810393298 +0000
++++ b/system/sepolicy/private/lpdumpd.te	2026-10-29 04:08:44.855986898 +0000
+@@ -5,7 +5,9 @@
+ 
+ # Allow lpdumpd to register itself as a service.
+ binder_use(lpdumpd)
+-add_service(lpdumpd, lpdump_service)
++# [X6885] lpdumpd dijalankan di domain recovery (adb shell). Macro add_service memuat
++# neverallow add untuk domain lain, jadi diganti allow tanpa neverallow itu.
++allow lpdumpd lpdump_service:service_manager { add find };
+ 
+ # Allow lpdumpd to find the super partition block device.
+ allow lpdumpd block_device:dir r_dir_perms;
+@@ -36,6 +38,7 @@
+     -dumpstate
+     -lpdumpd
+     -shell
++    recovery_only(`-recovery')
+ } lpdump_service:service_manager find;
+ 
+ neverallow {

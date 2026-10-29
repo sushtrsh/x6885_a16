@@ -68,6 +68,11 @@ recovery_only(`
   binder_call(recovery, keystore)
   allow recovery { keystore_service authorization_service
                    keystore_compat_hal_service }:service_manager find;
+  # lpdump/lpdumpd: daftarkan dan cari lpdump_service, set sys.lpdumpd untuk start service.
+  allow recovery lpdump_service:service_manager { add find };
+  set_prop(recovery, lpdumpd_prop)
+  # lpdump (klien) memanggil lpdumpd lewat binder; keduanya berjalan di domain recovery.
+  allow recovery recovery:binder { call transfer };
   allow recovery keystore:keystore2 add_auth;
   allow recovery vold_key:keystore2_key { use manage_blob };
   allow recovery locksettings_key:keystore2_key { use get_info req_forced_op };
