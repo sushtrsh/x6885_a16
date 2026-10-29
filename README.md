@@ -11,7 +11,7 @@ Unofficial OrangeFox Recovery device tree for Android 16 on the MediaTek MT6789 
 | Architecture | `ARM64` |
 | Android Version | `Android 16` |
 | SDK Version | `36` |
-| Vendor Security Patch | `2026-08-01` |
+| Vendor Security Patch | `2026-09-05` |
 | Kernel Module ABI | `6.12.38-android16-5-gcc51d883045d-4k` |
 | Platform Modules | `234 modules + 5 stock metadata files` |
 

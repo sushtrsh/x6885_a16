@@ -23,16 +23,16 @@ odm /odm erofs ro wait,slotselect,avb,logical,first_stage_mount
 odm /odm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 
 
-vendor_dlkm /vendor_dlkm erofs ro wait,slotselect,logical,first_stage_mount
-vendor_dlkm /vendor_dlkm ext4 ro wait,slotselect,logical,first_stage_mount
+vendor_dlkm /vendor_dlkm erofs ro wait,slotselect,avb,logical,first_stage_mount
+vendor_dlkm /vendor_dlkm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 
 
-odm_dlkm /odm_dlkm erofs ro wait,slotselect,logical,first_stage_mount
-odm_dlkm /odm_dlkm ext4 ro wait,slotselect,logical,first_stage_mount
+odm_dlkm /odm_dlkm erofs ro wait,slotselect,avb,logical,first_stage_mount
+odm_dlkm /odm_dlkm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 
 
-system_dlkm /system_dlkm erofs ro wait,slotselect,logical,first_stage_mount
-system_dlkm /system_dlkm ext4 ro wait,slotselect,logical,first_stage_mount
+system_dlkm /system_dlkm erofs ro wait,slotselect,avb,logical,first_stage_mount
+system_dlkm /system_dlkm ext4 ro wait,slotselect,avb,logical,first_stage_mount
 
 
 /dev/block/by-name/metadata /metadata ext4 noatime,nosuid,nodev,discard wait,check,formattable,first_stage_mount
@@ -175,8 +175,8 @@ tr_overlayfs /tr_overlayfs ext4 ro wait,slotselect,logical,first_stage_mount,avb
 tr_misc /tr_misc erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 tr_misc /tr_misc ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
 
-tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
-tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey,nofail
+tr_manifest /mnt/vendor/tr_manifest erofs ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
+tr_manifest /mnt/vendor/tr_manifest ext4 ro wait,slotselect,logical,first_stage_mount,avb_keys=/odm/etc/vconfig/tran_avb.pubkey
 
 /mnt/vendor/tr_manifest /tr_manifest none ro,bind wait,nofail
 
