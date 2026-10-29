@@ -3,6 +3,10 @@
 /dev/mali[0-9]*        u:object_r:gpu_device:s0
 /tmp/misc/keystore(/.*)? u:object_r:keystore_data_file:s0
 
+# HAL service binaries for recovery keymint and gatekeeper
+/vendor/bin/hw/android\.hardware\.security\.keymint@.* u:object_r:hal_keymint_default_exec:s0
+/vendor/bin/hw/android\.hardware\.gatekeeper.* u:object_r:hal_gatekeeper_default_exec:s0
+
 /system/bin/bootstrap(/.*)? u:object_r:mtk_recovery_bootstrap:s0
 /dev/dri/card0 u:object_r:graphics_device:s0
 

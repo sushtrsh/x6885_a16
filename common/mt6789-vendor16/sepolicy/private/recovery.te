@@ -65,8 +65,6 @@ recovery_only(`
   hal_client_domain(recovery, hal_gatekeeper)
   hal_client_domain(recovery, hal_keymint)
   hal_client_domain(recovery, hal_keymaster)
-  allow recovery hal_keymint_service:service_manager { add find };
-  allow recovery hal_gatekeeper_service:service_manager { add find };
   binder_call(recovery, keystore)
   allow recovery { keystore_service authorization_service
                    keystore_compat_hal_service }:service_manager find;
