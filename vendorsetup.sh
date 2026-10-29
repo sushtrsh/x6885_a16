@@ -32,7 +32,6 @@ patch_files=(
     "${device_dir}/patches/09-patch-data-f2fs-fstab.patch"
     "${device_dir}/patches/10-patch-format-data-unmount-submounts.patch"
     "${device_dir}/patches/11-patch-lpdumpd-neverallow.patch"
-    "${device_dir}/patches/12-patch-keymint-gatekeeper-neverallow.patch"
 )
 
 export ALLOW_MISSING_DEPENDENCIES=true
