@@ -10,6 +10,7 @@
 /vbmeta                emmc   /dev/block/by-name/vbmeta                                           flags=display=vbmeta;slotselect;backup;flashimg
 /vbmeta_system         emmc   /dev/block/by-name/vbmeta_system                                    flags=display=vbmeta_system;slotselect;backup;flashimg
 /vbmeta_vendor         emmc   /dev/block/by-name/vbmeta_vendor                                    flags=display=vbmeta_vendor;slotselect;backup;flashimg
+/init_boot             emmc   /dev/block/by-name/init_boot                                        flags=display=init_boot;slotselect;backup;flashimg
 
 # Firmware
 /dtbo                  emmc   /dev/block/by-name/dtbo                                             flags=display=dtbo;slotselect;backup
@@ -37,8 +38,7 @@
 /otp                   emmc   /dev/block/by-name/otp                                              flags=display=otp
 /seccfg                emmc   /dev/block/by-name/seccfg                                           flags=display=seccfg
 /spmfw                 emmc   /dev/block/by-name/spmfw                                            flags=display=spmfw;slotselect
-/tee1                  emmc   /dev/block/by-name/tee1                                             flags=display=tee1
-/tee2                  emmc   /dev/block/by-name/tee2                                             flags=display=tee2
+/tee                   emmc   /dev/block/by-name/tee                                              flags=display=tee;slotselect;backup
 
 # Removable storage
 /external_sd           auto   /dev/block/mmcblk0p1                         /dev/block/mmcblk1p1   flags=display=Micro_SD_Card;storage;wipeingui;removable;backup=0
