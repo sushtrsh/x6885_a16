@@ -143,3 +143,7 @@ RECOVERY_BINARY_SOURCE_FILES += $(TARGET_OUT_EXECUTABLES)/strace
 
 # Assert
 TARGET_OTA_ASSERT_DEVICE := Infinix-X6885,X6885
+
+# TWRP & OrangeFox configurations
+-include $(DEVICE_PATH)/twrp.mk
+-include $(DEVICE_PATH)/fox.mk
