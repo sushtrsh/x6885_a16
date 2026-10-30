@@ -256,4 +256,13 @@ recovery_only(`
   allow ueventd self:global_capability_class_set sys_nice;
   # BARU: izinkan ctl.stop hanya untuk dua service (gatekeeper, keymint) sebelum Format Data
   set_prop(recovery, mtk_recovery_ctl_stop_prop)
+
+  # NV partitions (nvcfg, nvdata, protect_f, protect_s, persist): their root inodes
+  # carry vendor labels that are not in the recovery policy, so they show up as
+  # unlabeled. Without this, mount succeeds but listing/flashing/backup gets EACCES.
+  allow recovery unlabeled:dir { create_dir_perms mounton };
+  allow recovery unlabeled:file create_file_perms;
+  allow recovery unlabeled:lnk_file create_file_perms;
+  # Raw images (nvram, persist, frp) are flashed/backed up through the by-name nodes.
+  allow recovery block_device:blk_file rw_file_perms;
 ')
