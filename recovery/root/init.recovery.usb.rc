@@ -61,6 +61,9 @@ on boot
 on property:init.svc.adbd=stopped
     setprop sys.usb.ffs.ready 0
 
+on property:init.svc.fastbootd=stopped
+    setprop sys.usb.ffs.ready 0
+
 on property:sys.usb.config=none && property:sys.usb.configfs=1
     write /config/usb_gadget/g1/idVendor ${sys.usb.vid}
     rm /config/usb_gadget/g1/configs/b.1/f1
@@ -103,7 +106,7 @@ on property:sys.usb.config=sideload && property:sys.usb.configfs=1
     setprop sys.usb.pid 0xD001
     start adbd
 
-on property:sys.usb.ffs.ready=1 && property:sys.usb.config=adb && property:sys.usb.configfs=1
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=sideload && property:sys.usb.configfs=1
     write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "adb"
     write /config/usb_gadget/g1/idVendor ${sys.usb.vid}
     write /config/usb_gadget/g1/idProduct ${sys.usb.pid}
@@ -117,7 +120,7 @@ on property:sys.usb.config=fastboot && property:sys.usb.configfs=1
     setprop sys.usb.pid 0x4EE0
     start fastbootd
 
-on property:sys.usb.ffs.ready=1 && property:sys.usb.config=adb && property:sys.usb.configfs=1
+on property:sys.usb.ffs.ready=1 && property:sys.usb.config=fastboot && property:sys.usb.configfs=1
     write /config/usb_gadget/g1/configs/b.1/strings/0x409/configuration "fastboot"
     write /config/usb_gadget/g1/idVendor ${sys.usb.vid}
     write /config/usb_gadget/g1/idProduct ${sys.usb.pid}
