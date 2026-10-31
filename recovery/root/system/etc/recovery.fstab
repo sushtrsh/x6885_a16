@@ -27,6 +27,18 @@ tr_manifest             /tr_manifest    auto        ro                          
 /dev/block/by-name/metadata   /metadata   ext4    noatime,nosuid,nodev,discard                                     wait,check,formattable,first_stage_mount
 /dev/block/by-name/userdata   /data       f2fs    noatime,nosuid,nodev,discard,noflush_merge,fsync_mode=nobarrier,reserve_root=134217,resgid=1065,inlinecrypt    wait,check,formattable,quota,latemount,resize,reservedsize=128m,checkpoint=fs,fileencryption=aes-256-xts:aes-256-cts:v2+inlinecrypt_optimized,keydirectory=/metadata/vold/metadata_encryption,fsverity
 
+# Physical partitions
+/dev/block/by-name/super          /super          emmc    defaults                                                        defaults
+/dev/block/by-name/boot           /boot           emmc    defaults                                                        slotselect
+/dev/block/by-name/vendor_boot    /vendor_boot    emmc    defaults                                                        slotselect
+/dev/block/by-name/init_boot      /init_boot      emmc    defaults                                                        slotselect
+/dev/block/by-name/dtbo           /dtbo           emmc    defaults                                                        slotselect
+/dev/block/by-name/vbmeta         /vbmeta         emmc    defaults                                                        slotselect
+/dev/block/by-name/vbmeta_system  /vbmeta_system  emmc    defaults                                                        slotselect
+/dev/block/by-name/vbmeta_vendor  /vbmeta_vendor  emmc    defaults                                                        slotselect
+/dev/block/by-name/lk             /lk             emmc    defaults                                                        slotselect
+/dev/block/by-name/logo           /logo           emmc    defaults                                                        slotselect
+
 # Need to have this entry in here even though the mount point itself is no longer needed.
 # The update_engine code looks for this entry in order to determine the boot device address
 # and fails if it does not find it.
