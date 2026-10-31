@@ -25,13 +25,13 @@ recovery_only(`
   # logd is dynamically linked too: entrypoint alone cannot map its rootfs libraries.
   allow { logd servicemanager hwservicemanager vndservicemanager keystore
           hal_gatekeeper_default hal_keymint_default hal_bootctl_default
-          hal_health_default mtk_recovery_tee } rootfs:file { r_file_perms execute entrypoint };
+          hal_health_default mtk_recovery_tee fastbootd } rootfs:file { r_file_perms execute entrypoint };
   allow { logd servicemanager hwservicemanager vndservicemanager keystore
           hal_gatekeeper_default hal_keymint_default hal_bootctl_default
-          hal_health_default mtk_recovery_tee } rootfs:dir r_dir_perms;
+          hal_health_default mtk_recovery_tee fastbootd } rootfs:dir r_dir_perms;
   allow { logd servicemanager hwservicemanager vndservicemanager keystore
           hal_gatekeeper_default hal_keymint_default hal_bootctl_default
-          hal_health_default mtk_recovery_tee } tmpfs:dir search;
+          hal_health_default mtk_recovery_tee fastbootd } tmpfs:dir search;
   domain_trans(init, rootfs, mtk_recovery_tee)
   # The stock mobicore node is 0600 system:system; the daemon runs as root.
   allow mtk_recovery_tee self:global_capability_class_set { dac_override dac_read_search };
@@ -135,8 +135,10 @@ recovery_only(`
   allow recovery system_dlkm_file:lnk_file r_file_perms;
   allow recovery mtk_recovery_fstab_file:file create_file_perms;
   allow recovery mtk_recovery_fstab_file:lnk_file r_file_perms;
+  allow fastbootd mtk_recovery_fstab_file:file r_file_perms;
+  allow fastbootd mtk_recovery_fstab_file:lnk_file r_file_perms;
   allow init mtk_recovery_fstab_file:lnk_file create_file_perms;
-  allowxperm recovery functionfs:file ioctl { 0x6781 };
+  allowxperm { recovery fastbootd } functionfs:file ioctl { 0x6781 };
   r_dir_file(recovery, pstorefs)
   allow recovery linkerconfig_file:dir r_dir_perms;
   get_prop(recovery, device_logging_prop)
@@ -180,11 +182,12 @@ recovery_only(`
   allow recovery mnt_vendor_file:file create_file_perms;
   allowxperm recovery { system_data_file system_data_root_file media_rw_data_file vendor_data_file }:dir ioctl { 0x6613 0x6615 0x6617 };
   allowxperm recovery { system_data_file tmpfs }:file ioctl { 0xf50c };
-  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x4c01 0x5331 };
-  # liblp (lptools/updater) queries BLKIOMIN/BLKALIGNOFF/etc. on super (sdc63) before
-  # writing partition metadata; without these, flashing a ROM zip fails with
+  allowxperm { recovery fastbootd } { block_device dm_device }:blk_file ioctl { 0x4c01 0x5331 };
+  # liblp (lptools/updater/fastbootd) queries BLKIOMIN/BLKALIGNOFF/etc. on super (sdc63) before
+  # writing partition metadata; without these, flashing a ROM zip or fastbootd flash fails with
   # "Failed to write partition table" and system_a/product_a/system_ext_a are never resized.
-  allowxperm recovery { block_device dm_device }:blk_file ioctl { 0x1260-0x127f };
+  allowxperm { recovery fastbootd } { block_device dm_device }:blk_file ioctl { 0x1260-0x127f };
+  allow fastbootd { block_device dm_device }:blk_file rw_file_perms;
   # Format Data: OrangeFox runs dmsetup to drop the userdata dm-default-key
   # mapping before make_f2fs; dmsetup was denied write on /dev (mkdir /dev/mapper),
   # so mkfs failed with "In use by the system!". Only the first rule is confirmed
@@ -256,7 +259,6 @@ recovery_only(`
   allow ueventd self:global_capability_class_set sys_nice;
   # BARU: izinkan ctl.stop hanya untuk dua service (gatekeeper, keymint) sebelum Format Data
   set_prop(recovery, mtk_recovery_ctl_stop_prop)
-
   # NV partitions (nvcfg, nvdata, protect_f, protect_s, persist): their root inodes
   # carry vendor labels that are not in the recovery policy, so they show up as
   # unlabeled. Without this, mount succeeds but listing/flashing/backup gets EACCES.
