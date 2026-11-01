@@ -22,16 +22,7 @@
 device_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace_root="$(cd "${device_dir}/../../.." && pwd)"
 patch_files=(
-    "${device_dir}/patches/01-patch-vibration.patch"
-    "${device_dir}/patches/02-patch-health-hal.patch"
-    "${device_dir}/patches/04-patch-native-vendor-ramdisk.patch"
-    "${device_dir}/patches/05-patch-enforcing-recovery.patch"
-    "${device_dir}/patches/06-patch-fbe-auth-token.patch"
-    "${device_dir}/patches/07-patch-sideload-install-once.patch"
-    "${device_dir}/patches/08-patch-enforcing-runtime.patch"
-    "${device_dir}/patches/09-patch-data-f2fs-fstab.patch"
-    "${device_dir}/patches/10-patch-format-data-unmount-submounts.patch"
-    "${device_dir}/patches/11-patch-lpdumpd-neverallow.patch"
+    "${device_dir}/patches/x6885-recovery.patch"
 )
 
 export ALLOW_MISSING_DEPENDENCIES=true
