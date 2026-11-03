@@ -1,0 +1,1528 @@
+# X6885 OrangeFox recovery: gabungan patch 01,02,04-12 (net diff per file, 1 file patch).
+# Idempotent: forward apply atau reverse dry-run berlaku utk seluruh set sekaligus.
+
+--- a/bootable/recovery/Android.mk
++++ b/bootable/recovery/Android.mk
+@@ -683,10 +683,13 @@
+ LOCAL_MODULE := file_contexts_text
+ LOCAL_MODULE_TAGS := optional
+ LOCAL_REQUIRED_MODULES := file_contexts.bin
++LOCAL_MODULE_CLASS := ETC
++LOCAL_MODULE_PATH := $(TARGET_RECOVERY_ROOT_OUT)
++LOCAL_MODULE_STEM := file_contexts
++LOCAL_PREBUILT_MODULE_FILE := $(PRODUCT_OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp
++LOCAL_ADDITIONAL_DEPENDENCIES := $(PRODUCT_OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp
+ 
+-LOCAL_POST_INSTALL_CMD := \
+-    mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/; \
+-    cp -fn $(PRODUCT_OUT)/obj/ETC/file_contexts.bin_intermediates/file_contexts.concat.tmp $(TARGET_RECOVERY_ROOT_OUT)/file_contexts;
++LOCAL_POST_INSTALL_CMD :=
+ 
+ # Darth9
+ #
+@@ -708,7 +711,7 @@
+ #
+ # Darth9
+ 
+-include $(BUILD_PHONY_PACKAGE)
++include $(BUILD_PREBUILT)
+ 
+ # recovery-persist (system partition dynamic executable run after /data mounts)
+ # ===============================
+--- a/bootable/recovery/etc/init/hwservicemanager.rc
++++ b/bootable/recovery/etc/init/hwservicemanager.rc
+@@ -6,4 +6,4 @@
+     group root
+     onrestart setprop hwservicemanager.ready false
+     disabled
+-    seclabel u:r:recovery:s0
++    seclabel u:r:hwservicemanager:s0
+--- a/bootable/recovery/etc/init/servicemanager.rc
++++ b/bootable/recovery/etc/init/servicemanager.rc
+@@ -5,4 +5,4 @@
+     user root
+     group root readproc
+     disabled
+-    seclabel u:r:recovery:s0
++    seclabel u:r:servicemanager:s0
+--- a/bootable/recovery/etc/init/vndservicemanager.rc
++++ b/bootable/recovery/etc/init/vndservicemanager.rc
+@@ -7,4 +7,4 @@
+     group root readproc
+     writepid /dev/cpuset/system-background/tasks
+     shutdown critical
+-    seclabel u:r:recovery:s0
++    seclabel u:r:vndservicemanager:s0
+--- a/bootable/recovery/etc/init.rc
++++ b/bootable/recovery/etc/init.rc
+@@ -39,7 +39,6 @@
+     symlink /proc/self/fd/2 /dev/stderr
+ 
+     symlink /system/bin /bin
+-    symlink /system/etc /etc
+ 
+     mount cgroup none /acct cpuacct
+     mkdir /acct/uid
+@@ -54,6 +53,14 @@
+ 
+     chown root shell /tmp
+     chmod 0775 /tmp
++
++    rm /etc
++    # Create the mountpoint with its parent label; /etc becomes tmpfs after mount.
++    exec u:r:recovery:s0 root root -- /system/bin/toybox mkdir -m 0755 /etc
++    mount tmpfs tmpfs /etc mode=0755
++    restorecon /etc
++    exec u:r:recovery:s0 root root -- /system/bin/toybox cp -pR /system/etc/. /etc/
++    restorecon /etc/recovery.fstab /etc/task_profiles.json /etc/cgroups.json
+     mkdir /tmp/misc
+     mkdir /tmp/misc/keystore/
+ 
+@@ -107,7 +114,7 @@
+     critical
+     seclabel u:r:ueventd:s0
+ 
+-service adbd /system/bin/adbd --root_seclabel=u:r:su:s0 --device_banner=recovery
++service adbd /system/bin/adbd --root_seclabel=u:r:recovery:s0 --device_banner=recovery
+     disabled
+     socket adbd stream 660 system system
+     seclabel u:r:adbd:s0
+--- a/bootable/recovery/etc/init.recovery.logd.rc
++++ b/bootable/recovery/etc/init.recovery.logd.rc
+@@ -3,6 +3,7 @@
+ 
+ service logd /system/bin/logd
+     class core
++    socket logd stream 0666 logd logd
+     socket logdr seqpacket 0666 root root
+     socket logdw dgram+passcred 0222 root root
+     file /proc/kmsg r
+--- a/bootable/recovery/minuitwrp/events.cpp
++++ b/bootable/recovery/minuitwrp/events.cpp
+@@ -61,6 +61,7 @@
+ #define VIBRATOR_TIMEOUT_FILE	"/sys/class/timed_output/vibrator/enable"
+ #define VIBRATOR_TIME_MS    50
+ 
++#define LEDS_VIBRATOR_BRIGHTNESS_FILE	"/sys/class/leds/vibrator/brightness"
+ #define LEDS_HAPTICS_DURATION_FILE	"/sys/class/leds/vibrator/duration"
+ #define LEDS_HAPTICS_ACTIVATE_FILE	"/sys/class/leds/vibrator/activate"
+ 
+@@ -182,11 +183,17 @@
+         write_to_file(VIBRATOR_TIMEOUT_FILE, tout);
+     }
+ #else
+-    if (std::ifstream(LEDS_HAPTICS_ACTIVATE_FILE).good()) {
++    if (std::ifstream(LEDS_VIBRATOR_BRIGHTNESS_FILE).good()) {
++        if (timeout_ms < 80) timeout_ms = 80;
++        write_to_file(LEDS_VIBRATOR_BRIGHTNESS_FILE, "255");
++        usleep(timeout_ms * 1000);
++        write_to_file(LEDS_VIBRATOR_BRIGHTNESS_FILE, "0");
++    } else if (std::ifstream(LEDS_HAPTICS_ACTIVATE_FILE).good()) {
+         write_to_file(LEDS_HAPTICS_DURATION_FILE, tout);
+         write_to_file(LEDS_HAPTICS_ACTIVATE_FILE, "1");
+-    } else
++    } else {
+         write_to_file(VIBRATOR_TIMEOUT_FILE, tout);
++    }
+ #endif
+     return 0;
+ }
+--- a/bootable/recovery/openrecoveryscript.cpp
++++ b/bootable/recovery/openrecoveryscript.cpp
+@@ -423,11 +423,9 @@
+ 					if (ret_val == -2)
+ 						gui_err("need_new_adb=You need adb 1.0.32 or newer to sideload to this device.");
+ 					ret_val = 1; // failure
+-				} else if (TWinstall_zip(FUSE_SIDELOAD_HOST_PATHNAME, &wipe_cache) == 0) {
++				} else {
+ 					if (wipe_cache)
+ 						PartitionManager.Wipe_By_Path("/cache");
+-				} else {
+-					ret_val = 1; // failure
+ 				}
+ 				PartitionManager.Unlock_Block_Partitions();
+ 				PartitionManager.Update_System_Details();
+--- a/bootable/recovery/orangefox.hpp
++++ b/bootable/recovery/orangefox.hpp
+@@ -28,7 +28,7 @@
+ #define OTA_ERROR "INSTALL_ERROR"
+ #define OTA_VERIFY_FAIL "INSTALL_VERIFY_FAILURE"
+ #define OTA_SUCCESS "INSTALL_SUCCESS"
+-#define FOX_TMP_PATH "/foxtmpfile"
++#define FOX_TMP_PATH "/tmp/foxtmpfile"
+ 
+ // global variables
+ static bool zip_is_for_specific_build = false;
+--- a/bootable/recovery/partition.cpp
++++ b/bootable/recovery/partition.cpp
+@@ -1807,6 +1807,14 @@
+ 		if (!Symlink_Mount_Point.empty())
+ 			umount2(Symlink_Mount_Point.c_str(), flags);
+ 
++		// [X6885] /data/user/0 is a separate mount while /data is decrypted; unmount it first,
++		// otherwise umount2(/data) fails with EBUSY and only the lazy fallback detaches it
++		// (the device then stays busy for dmctl/make_f2fs).
++		if (Mount_Point == "/data") {
++			if (umount2("/data/user/0", flags) != 0 && errno == EBUSY)
++				umount2("/data/user/0", MNT_DETACH);
++		}
++
+ 		umount2(Mount_Point.c_str(), flags);
+ 		if (Is_Mounted()) {
+ 			if (Mount_Point == "/data" || Mount_Point == "/sdcard" || Mount_Point == "/data/media/0") {
+--- a/bootable/recovery/partitionmanager.cpp
++++ b/bootable/recovery/partitionmanager.cpp
+@@ -135,7 +135,47 @@
+ extern bool datamedia;
+ std::vector<users_struct> Users_List;
+ 
+-std::string additional_fstab = "/etc/additional.fstab";
++// Generated vendor fstab belongs on writable recovery tmpfs.
++std::string additional_fstab = "/tmp/additional.fstab";
++#include <fstream>
++#include <sstream>
++#include <string>
++#include <vector>
++
++// The stock vendor fstab lists /data twice: f2fs first, then an ext4 fallback.
++// OrangeFox lets the later line win, so userdata was treated as ext4 and a
++// wipe/format from recovery could produce the wrong filesystem. When an f2fs
++// /data entry exists, drop the ext4 fallback from the generated copy.
++static void Drop_Ext4_Data_Fallback(const std::string& path) {
++	std::ifstream in(path);
++	if (!in.is_open())
++		return;
++	std::vector<std::string> lines;
++	std::string line;
++	bool has_f2fs_data = false;
++	while (std::getline(in, line)) {
++		lines.push_back(line);
++		std::istringstream ss(line);
++		std::string src, mnt, fs;
++		if ((ss >> src >> mnt >> fs) && src[0] != '#' && mnt == "/data" && fs == "f2fs")
++			has_f2fs_data = true;
++	}
++	in.close();
++	if (!has_f2fs_data)
++		return;
++	std::ofstream out(path, std::ios::trunc);
++	if (!out.is_open())
++		return;
++	for (const auto& l : lines) {
++		std::istringstream ss(l);
++		std::string src, mnt, fs;
++		if ((ss >> src >> mnt >> fs) && src[0] != '#' && mnt == "/data" && fs == "ext4") {
++			LOGINFO("Dropping ext4 /data fallback from additional fstab\n");
++			continue;
++		}
++		out << l << "\n";
++	}
++}
+ 
+ TWPartitionManager::TWPartitionManager(void) {
+ 	mtp_was_enabled = false;
+@@ -426,7 +466,7 @@
+ parse:
+ #endif
+ 	fstabFile = fopen(Fstab_Filename.c_str(), "rt");
+-	if (!parse_userdata && fstabFile == NULL) {
++	if (fstabFile == NULL) {
+ 		LOGERR("Critical Error: Unable to open fstab at '%s'.\n", Fstab_Filename.c_str());
+ 		return false;
+ 	} else
+@@ -513,10 +553,14 @@
+ 		// Now Fetch the additional fstab
+ 		if (TWFunc::Find_Fstab(Fstab_Filename)) {
+ 			LOGINFO("Fstab: %s\n", Fstab_Filename.c_str());
+-			TWFunc::copy_file(Fstab_Filename, additional_fstab, 0600, false);
+-			Fstab_Filename = additional_fstab;
+-			property_set("fstab.additional", "1");
+-			goto parse;
++			if (TWFunc::copy_file(Fstab_Filename, additional_fstab, 0600, false) == 0) {
++				Drop_Ext4_Data_Fallback(additional_fstab);
++				Fstab_Filename = additional_fstab;
++				property_set("fstab.additional", "1");
++				goto parse;
++			}
++			LOGERR("Unable to prepare additional fstab at '%s'; keeping recovery fstab.\n", additional_fstab.c_str());
++			property_set("fstab.additional", "0");
+ 		} else {
+ 			LOGINFO("Unable to parse vendor fstab\n");
+ 		}
+--- a/bootable/recovery/twrp-functions.cpp
++++ b/bootable/recovery/twrp-functions.cpp
+@@ -2784,8 +2784,6 @@
+ 
+   OrangeFox_Startup_Executed++;
+ 
+-  if (TWFunc::Path_Exists(FOX_PS_BIN)) 
+-      chmod (FOX_PS_BIN, 0755);
+   
+   Fox_Current_ROM = "";
+   
+@@ -5014,7 +5012,8 @@
+ }
+ 
+ void TWFunc::Set_Sbin_Dir_Executable_Flags(void) {
+-  system("chmod 0755 /sbin/*");
++  // fs_config assigns 0755 to /sbin helpers while building the ramdisk.
++  // Keep this legacy entry point; recovery must not chmod the enforcing rootfs.
+ }
+ 
+ bool TWFunc::IsBinaryXML(const std::string filename) {
+--- a/bootable/recovery/twrpinstall/adb_install.cpp
++++ b/bootable/recovery/twrpinstall/adb_install.cpp
+@@ -42,6 +42,7 @@
+ #include <android-base/properties.h>
+ #include <android-base/strings.h>
+ #include <android-base/unique_fd.h>
++#include <android-base/scopeguard.h>
+ 
+ #include "fuse_sideload.h"
+ #include "twinstall/install.h"
+@@ -282,7 +283,12 @@
+ static void CreateMinadbdServiceAndExecuteCommands(
+     const std::map<MinadbdCommand, CommandFunction>& command_map,
+     bool rescue_mode __unused, std::string install_file __unused) {
+-  signal(SIGPIPE, SIG_IGN);
++  const auto saved_sigpipe_handler = signal(SIGPIPE, SIG_IGN);
++  auto restore_sigpipe = android::base::make_scope_guard([saved_sigpipe_handler] {
++    if (saved_sigpipe_handler != SIG_ERR) {
++      signal(SIGPIPE, saved_sigpipe_handler);
++    }
++  });
+ 
+   android::base::unique_fd recovery_socket;
+   android::base::unique_fd minadbd_socket;
+@@ -336,7 +342,6 @@
+     }
+   }
+ 
+-  signal(SIGPIPE, SIG_DFL);
+ }
+ 
+   int twrp_sideload(const char* install_file, Device::BuiltinAction* reboot_action) {
+--- a/build/make/core/Makefile
++++ b/build/make/core/Makefile
+@@ -342,6 +342,9 @@
+   INTERNAL_VENDOR_RAMDISK_FRAGMENTS += recovery
+   VENDOR_RAMDISK_FRAGMENT.recovery.STAGING_DIR := $(TARGET_RECOVERY_ROOT_OUT)
+   VENDOR_RAMDISK_FRAGMENT.recovery.FILES := $(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP)
++  ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++    VENDOR_RAMDISK_FRAGMENT.recovery.FILES += $(PRODUCT_OUT)/ramdisk-recovery.cpio
++  endif
+   BOARD_VENDOR_RAMDISK_FRAGMENT.recovery.MKBOOTIMG_ARGS += --ramdisk_type RECOVERY
+   .KATI_READONLY := VENDOR_RAMDISK_FRAGMENT.recovery.STAGING_DIR
+ endif
+@@ -1198,7 +1201,11 @@
+ endif
+ 
+ 
+-ifeq ($(BOARD_RAMDISK_USE_LZ4),true)
++ifeq ($(BOARD_RAMDISK_USE_ZSTD),true)
++COMPRESSION_COMMAND_DEPS := $(ZSTD_RAMDISK)
++COMPRESSION_COMMAND := $(ZSTD_RAMDISK) -q -19 --no-check -c
++RAMDISK_EXT := .zst
++else ifeq ($(BOARD_RAMDISK_USE_LZ4),true)
+ # -l enables the legacy format used by the Linux kernel
+ COMPRESSION_COMMAND_DEPS := $(LZ4)
+ COMPRESSION_COMMAND := $(LZ4) -l -12 --favor-decSpeed
+@@ -1599,7 +1606,18 @@
+ endif
+ endif
+ 
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++$(INTERNAL_VENDOR_RAMDISK_TARGET): PRIVATE_BOOTSTRAP_DIRS := debug_ramdisk dev metadata mnt proc second_stage_resources sys system/bin
++$(INTERNAL_VENDOR_RAMDISK_TARGET): $(TARGET_RAMDISK_OUT)/init
++endif
++
+ $(INTERNAL_VENDOR_RAMDISK_TARGET): $(MKBOOTFS) $(INTERNAL_VENDOR_RAMDISK_FILES) | $(COMPRESSION_COMMAND_DEPS)
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++	$(hide) mkdir -p $(addprefix $(TARGET_VENDOR_RAMDISK_OUT)/,$(PRIVATE_BOOTSTRAP_DIRS))
++	$(hide) cp -fp $(TARGET_RAMDISK_OUT)/init $(TARGET_VENDOR_RAMDISK_OUT)/system/bin/init
++	$(hide) chmod 0755 $(TARGET_VENDOR_RAMDISK_OUT)/system/bin/init
++	$(hide) ln -sfn /system/bin/init $(TARGET_VENDOR_RAMDISK_OUT)/init
++endif
+ 	$(MKBOOTFS) -d $(TARGET_OUT) $(TARGET_VENDOR_RAMDISK_OUT) $(PRIVATE_ADDITIONAL_DIR) | $(COMPRESSION_COMMAND) > $@
+ 
+ INSTALLED_VENDOR_RAMDISK_TARGET := $(PRODUCT_OUT)/vendor_ramdisk.img
+@@ -1735,6 +1753,7 @@
+   	BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT=$(BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT) \
+   	BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT=$(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT) \
+   	ORANGEFOX_CALLING_CARD="1.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9 - vendor_boot
+@@ -2756,7 +2775,7 @@
+   RECOVERYIMAGE_EXTRA_DEPS    := $(INSTALLED_DTIMAGE_TARGET)
+ endif
+ 
+-$(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP): $(MKBOOTFS) \
++$(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP): $(MKBOOTFS) $(FOX_VENDOR) \
+ 	    $(INTERNAL_ROOT_FILES) \
+ 	    $(INSTALLED_RAMDISK_TARGET) \
+ 	    $(INTERNAL_RECOVERYIMAGE_FILES) \
+@@ -2798,6 +2817,7 @@
+   	BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT=$(BOARD_INCLUDE_RECOVERY_RAMDISK_IN_VENDOR_BOOT) \
+   	BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT=$(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT) \
+   	ORANGEFOX_CALLING_CARD="2.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9
+@@ -2823,6 +2843,9 @@
+ 	ln -sf prop.default $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+ 
+ 	# Silence warnings in first_stage_console.
++ifeq ($(BOARD_VENDOR_RAMDISK_BOOTSTRAP),true)
++	$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/lib/modules/*.ko $(TARGET_RECOVERY_ROOT_OUT)/lib/modules/modules.*
++endif
+ 	touch $(TARGET_RECOVERY_ROOT_OUT)/linkerconfig/ld.config.txt
+ 	cd $(TARGET_RECOVERY_ROOT_OUT) && touch ramdisk-files.txt && touch ramdisk-files.sha256sum && find . | sed "s/.\///" > ramdisk-files.txt
+ 	cd $(TARGET_RECOVERY_ROOT_OUT) && find -type f | sed "s/.\/ramdisk-files.sha256sum//" | sed "/prop.default/d" | xargs sha256sum > ramdisk-files.sha256sum
+@@ -2909,6 +2932,7 @@
+   	BOARD_USES_RECOVERY_AS_BOOT=$(BOARD_USES_RECOVERY_AS_BOOT) \
+   	INTERNAL_KERNEL_CMDLINE="$(INTERNAL_KERNEL_CMDLINE)" \
+   	ORANGEFOX_CALLING_CARD="3.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ # Darth9
+@@ -2976,6 +3000,7 @@
+   	BOARD_USES_RECOVERY_AS_BOOT=$(BOARD_USES_RECOVERY_AS_BOOT) \
+   	INTERNAL_KERNEL_CMDLINE="$(INTERNAL_KERNEL_CMDLINE)" \
+   	ORANGEFOX_CALLING_CARD="4.0" \
++  	recovery_uncompressed_ramdisk="$(recovery_uncompressed_ramdisk)" \
+   	recovery_ramdisk="$(recovery_ramdisk)"
+ endif
+ endif
+--- a/build/make/core/config.mk
++++ b/build/make/core/config.mk
+@@ -681,6 +681,7 @@
+ MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ MINIGZIP := $(GZIP)
+ LZ4 := $(HOST_OUT_EXECUTABLES)/lz4$(HOST_EXECUTABLE_SUFFIX)
++ZSTD_RAMDISK := $(HOST_OUT_EXECUTABLES)/ramdisk_zstd$(HOST_EXECUTABLE_SUFFIX)
+ LZMA := prebuilts/tools-lineage/linux-x86/bin/lzma
+ ifeq (,$(strip $(BOARD_CUSTOM_MKBOOTIMG)))
+ MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
+--- a/external/zstd/Android.bp
++++ b/external/zstd/Android.bp
+@@ -248,3 +248,12 @@
+         "tests/fuzz/zstd_frame_info.c",
+     ],
+ }
++
++cc_binary_host {
++    name: "ramdisk_zstd",
++    srcs: ["programs/*.c"],
++    local_include_dirs: ["lib", "lib/common", "programs"],
++    static_libs: ["libzstd"],
++    cflags: ["-Wno-unused-parameter"],
++    stl: "none",
++}
+--- a/hardware/interfaces/health/aidl/default/Android.bp
++++ b/hardware/interfaces/health/aidl/default/Android.bp
+@@ -134,7 +134,6 @@
+ cc_defaults {
+     name: "android.hardware.health-service.example-defaults",
+     relative_install_path: "hw",
+-    vintf_fragments: ["android.hardware.health-service.example.xml"],
+     defaults: [
+         "libhealth_aidl_impl_user",
+     ],
+--- a/system/core/init/selinux.cpp
++++ b/system/core/init/selinux.cpp
+@@ -105,6 +105,8 @@
+ }
+ 
+ bool IsEnforcing() {
++    // Recovery is built with a complete enforcing policy, including on eng builds.
++    if (IsRecoveryMode()) return true;
+     if (ALLOW_PERMISSIVE_SELINUX) {
+         return StatusFromProperty() == SELINUX_ENFORCING;
+     }
+--- a/system/core/libcutils/fs_config.cpp
++++ b/system/core/libcutils/fs_config.cpp
+@@ -215,6 +215,7 @@
+     { 00755, AID_ROOT,      AID_ROOT,      0, "first_stage_ramdisk/system/bin/fsck.f2fs" },
+     // generic defaults
+     { 00755, AID_ROOT,      AID_ROOT,      0, "bin/*" },
++    { 00755, AID_ROOT,      AID_ROOT,      0, "sbin/*" },
+     { 00640, AID_ROOT,      AID_SHELL,     0, "fstab.*" },
+     { 00750, AID_ROOT,      AID_SHELL,     0, "init*" },
+     { 00755, AID_ROOT,      AID_SHELL,     0, "odm/bin/*" },
+--- a/system/linkerconfig/contents/namespace/recoverydefault.cc
++++ b/system/linkerconfig/contents/namespace/recoverydefault.cc
+@@ -27,6 +27,8 @@
+   Namespace ns("default");
+ 
+   ns.AddSearchPath("/system/${LIB}");
++  // Recovery packages vendor HAL dependencies in its own vendor ramdisk directory.
++  ns.AddSearchPath("/vendor/${LIB}");
+ 
+   return ns;
+ }
+--- a/system/sepolicy/private/adbd.te
++++ b/system/sepolicy/private/adbd.te
+@@ -238,4 +238,4 @@
+ # transitions to the shell domain (except when it crashes). In particular, we
+ # never want to see a transition from adbd to su (aka "adb root")
+ neverallow adbd { domain -crash_dump -shell }:process transition;
+-neverallow adbd { domain userdebug_or_eng(`-su') recovery_only(`-shell') }:process dyntransition;
++neverallow adbd { domain userdebug_or_eng(`-su') recovery_only(`-shell -recovery') }:process dyntransition;
+--- a/system/sepolicy/private/apexd.te
++++ b/system/sepolicy/private/apexd.te
+@@ -166,17 +166,17 @@
+ # Allow apexd to read apexd_payload_metadata_prop
+ get_prop(apexd, apexd_payload_metadata_prop)
+ 
+-neverallow { domain -apexd -init } apex_data_file:dir no_w_dir_perms;
++neverallow { domain -apexd -init  recovery_only(`-recovery') } apex_data_file:dir no_w_dir_perms;
+ neverallow { domain -apexd -init } apex_metadata_file:dir no_w_dir_perms;
+-neverallow { domain -apexd -init -kernel } apex_data_file:file no_w_file_perms;
++neverallow { domain -apexd -init -kernel  recovery_only(`-recovery') } apex_data_file:file no_w_file_perms;
+ neverallow { domain -apexd -init -kernel } apex_metadata_file:file no_w_file_perms;
+ neverallow { domain -apexd } apex_mnt_dir:lnk_file no_w_file_perms;
+ 
+-neverallow { domain -apexd -init -vold_prepare_subdirs } apex_module_data_file:dir no_w_dir_perms;
+-neverallow { domain -apexd -init -vold_prepare_subdirs } apex_module_data_file:file no_w_file_perms;
++neverallow { domain -apexd -init -vold_prepare_subdirs  recovery_only(`-recovery') } apex_module_data_file:dir no_w_dir_perms;
++neverallow { domain -apexd -init -vold_prepare_subdirs  recovery_only(`-recovery') } apex_module_data_file:file no_w_file_perms;
+ 
+-neverallow { domain -apexd -init -vold_prepare_subdirs } apex_rollback_data_file:dir no_w_dir_perms;
+-neverallow { domain -apexd -init -vold_prepare_subdirs } apex_rollback_data_file:file no_w_file_perms;
++neverallow { domain -apexd -init -vold_prepare_subdirs  recovery_only(`-recovery') } apex_rollback_data_file:dir no_w_dir_perms;
++neverallow { domain -apexd -init -vold_prepare_subdirs  recovery_only(`-recovery') } apex_rollback_data_file:file no_w_file_perms;
+ 
+ # only apexd can set apexd sysprop
+ set_prop(apexd, apexd_prop)
+--- a/system/sepolicy/private/domain.te
++++ b/system/sepolicy/private/domain.te
+@@ -262,13 +262,13 @@
+   -init
+   -system_server
+   userdebug_or_eng(`-dumpstate')
+-} dropbox_data_file:dir *;
++ recovery_only(`-recovery') } dropbox_data_file:dir *;
+ neverallow {
+   domain
+   -init
+   -system_server
+   userdebug_or_eng(`-dumpstate')
+-} dropbox_data_file:file ~{ getattr read };
++ recovery_only(`-recovery') } dropbox_data_file:file ~{ getattr read };
+ 
+ ###
+ # Services should respect app sandboxes
+@@ -277,7 +277,7 @@
+   -appdomain
+   -artd # compile secondary dex files
+   -installd # creation of sandbox
+-} { privapp_data_file app_data_file }:dir_file_class_set { create unlink };
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:dir_file_class_set { create unlink };
+ 
+ # Only the following processes should be directly accessing private app
+ # directories.
+@@ -295,7 +295,7 @@
+   -system_server
+   -viewcompiler
+   -zygote
+-} { privapp_data_file app_data_file }:dir *;
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:dir *;
+ 
+ # Only apps should be modifying app data. installd is exempted for
+ # restorecon and package install/uninstall.
+@@ -305,7 +305,7 @@
+   -artd # compile secondary dex files
+   -installd
+   -rs # spawned by appdomain, so carryover the exception above
+-} { privapp_data_file app_data_file }:dir ~r_dir_perms;
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:dir ~r_dir_perms;
+ 
+ neverallow {
+   domain
+@@ -314,20 +314,20 @@
+   -artd # compile secondary dex files
+   -installd
+   -rs # spawned by appdomain, so carryover the exception above
+-} { privapp_data_file app_data_file }:file_class_set open;
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:file_class_set open;
+ 
+ neverallow {
+   domain
+   -appdomain
+   -artd # compile secondary dex files
+   -installd # creation of sandbox
+-} { privapp_data_file app_data_file }:dir_file_class_set { create unlink };
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:dir_file_class_set { create unlink };
+ 
+ neverallow {
+   domain
+   -artd # compile secondary dex files
+   -installd
+-} { privapp_data_file app_data_file }:dir_file_class_set { relabelfrom relabelto };
++ recovery_only(`-recovery') } { privapp_data_file app_data_file }:dir_file_class_set { relabelfrom relabelto };
+ 
+ # The staging directory contains APEX and APK files. It is important to ensure
+ # that these files cannot be accessed by other domains to ensure that the files
+@@ -341,7 +341,7 @@
+   -installd
+   -priv_app
+   -virtualizationmanager
+-} staging_data_file:dir *;
++ recovery_only(`-recovery') } staging_data_file:dir *;
+ neverallow {
+   domain
+   -init
+@@ -355,11 +355,11 @@
+   -shell
+   -virtualizationmanager
+   -crosvm
+-} staging_data_file:file *;
+-neverallow { domain -init -system_server -installd} staging_data_file:dir no_w_dir_perms;
++ recovery_only(`-recovery') } staging_data_file:file *;
++neverallow { domain -init -system_server -installd recovery_only(`-recovery') } staging_data_file:dir no_w_dir_perms;
+ # apexd needs the link and unlink permissions, so list every `no_w_file_perms`
+ # except for `link` and `unlink`.
+-neverallow { domain -init -system_server } staging_data_file:file
++neverallow { domain -init -system_server  recovery_only(`-recovery') } staging_data_file:file
+   { append create relabelfrom rename setattr write no_x_file_perms };
+ 
+ neverallow {
+@@ -416,7 +416,7 @@
+   -dex2oat
+   -otapreopt_slot
+   -artd
+-} dalvikcache_data_file:file no_w_file_perms;
++ recovery_only(`-recovery') } dalvikcache_data_file:file no_w_file_perms;
+ 
+ neverallow {
+   domain
+@@ -428,7 +428,7 @@
+   -zygote
+   -otapreopt_slot
+   -artd
+-} dalvikcache_data_file:dir no_w_dir_perms;
++ recovery_only(`-recovery') } dalvikcache_data_file:dir no_w_dir_perms;
+ 
+ # Only authorized processes should be writing to /data/misc/apexdata/com.android.art as it
+ # contains boot class path and system server AOT artifacts following an ART APEX Mainline update.
+@@ -443,7 +443,7 @@
+   -apexd
+   -init
+   -vold_prepare_subdirs
+-} apex_art_data_file:file no_w_file_perms;
++ recovery_only(`-recovery') } apex_art_data_file:file no_w_file_perms;
+ 
+ neverallow {
+   domain
+@@ -456,13 +456,13 @@
+   -apexd
+   -init
+   -vold_prepare_subdirs
+-} apex_art_data_file:dir no_w_dir_perms;
++ recovery_only(`-recovery') } apex_art_data_file:dir no_w_dir_perms;
+ 
+ # Protect most domains from executing arbitrary content from /data.
+ neverallow {
+   domain
+   -appdomain
+-} {
++ recovery_only(`-recovery') } {
+   data_file_type
+   -apex_art_data_file
+   -dalvikcache_data_file
+@@ -474,6 +474,7 @@
+ # Instead of granting them it is usually better to add the domain to
+ # a Unix group or change the permissions of a file.
+ define(`dac_override_allowed', `{
++  recovery_only(`mtk_recovery_tee')
+   apexd
+   artd
+   dnsmasq
+@@ -738,7 +739,7 @@
+   userdebug_or_eng(`-virtualizationmanager')
+   userdebug_or_eng(`-virtualizationservice')
+   userdebug_or_eng(`-crosvm')
+-} shell_data_file:file open;
++ recovery_only(`-recovery') } shell_data_file:file open;
+ 
+ # In addition to the symlink reading restrictions above, restrict
+ # write access to shell owned directories. The /data/local/tmp
+@@ -756,7 +757,7 @@
+   -init
+   -shell
+   -vold
+-} shell_data_file:dir no_w_dir_perms;
++ recovery_only(`-recovery') } shell_data_file:dir no_w_dir_perms;
+ 
+ neverallow {
+   domain
+@@ -769,7 +770,7 @@
+   -simpleperf_app_runner
+   -system_server # why?
+   userdebug_or_eng(`-uncrypt')
+-} shell_data_file:dir open;
++ recovery_only(`-recovery') } shell_data_file:dir open;
+ 
+ neverallow {
+   domain
+@@ -784,7 +785,7 @@
+   userdebug_or_eng(`-uncrypt')
+   userdebug_or_eng(`-virtualizationmanager')
+   userdebug_or_eng(`-crosvm')
+-} shell_data_file:dir search;
++ recovery_only(`-recovery') } shell_data_file:dir search;
+ 
+ # respect system_app sandboxes
+ neverallow {
+@@ -796,7 +797,7 @@
+   -traced_probes # resolve inodes for i/o tracing.
+                  # only needs open and read, the rest is neverallow in
+                  # traced_probes.te.
+-} system_app_data_file:dir_file_class_set { create unlink open };
++ recovery_only(`-recovery') } system_app_data_file:dir_file_class_set { create unlink open };
+ neverallow {
+   isolated_app_all
+   ephemeral_app
+@@ -808,7 +809,7 @@
+ neverallow { domain -init } mtectrl:process { dyntransition transition };
+ 
+ # For now, don't allow processes other than gmscore to access /data/misc_ce/<userid>/checkin
+-neverallow { domain -gmscore_app -init -vold_prepare_subdirs } checkin_data_file:{dir file} *;
++neverallow { domain -gmscore_app -init -vold_prepare_subdirs  recovery_only(`-recovery') } checkin_data_file:{dir file} *;
+ 
+ # Do not allow write access to aconfig flag value files except init and aconfigd
+ neverallow { domain -init -aconfigd } aconfig_storage_metadata_file:dir *;
+--- a/system/sepolicy/private/file_contexts
++++ b/system/sepolicy/private/file_contexts
+@@ -52,7 +52,7 @@
+ /proc               u:object_r:rootfs:s0
+ /second_stage_resources u:object_r:tmpfs:s0
+ /sys                u:object_r:sysfs:s0
+-/apex               u:object_r:apex_mnt_dir:s0
++# Recovery device policy labels its installer /apex mountpoint.
+ /bootstrap-apex     u:object_r:apex_mnt_dir:s0
+ /tmp                u:object_r:shell_data_file:s0
+ 
+@@ -67,7 +67,7 @@
+ /bugreports         u:object_r:rootfs:s0
+ /charger            u:object_r:rootfs:s0
+ /d                  u:object_r:rootfs:s0
+-/etc                u:object_r:rootfs:s0
++/etc             -l u:object_r:rootfs:s0
+ /sdcard             u:object_r:rootfs:s0
+ 
+ # SELinux policy files
+--- a/system/sepolicy/private/gsid.te
++++ b/system/sepolicy/private/gsid.te
+@@ -199,9 +199,9 @@
+     domain
+     -init
+     -gsid
+-} gsi_data_file:dir_file_class_set *;
++ recovery_only(`-recovery') } gsi_data_file:dir_file_class_set *;
+ 
+ neverallow {
+     domain
+     -gsid
+-} gsi_data_file:file_class_set ~{ relabelto getattr };
++ recovery_only(`-recovery') } gsi_data_file:file_class_set ~{ relabelto getattr };
+--- a/system/sepolicy/private/incidentd.te
++++ b/system/sepolicy/private/incidentd.te
+@@ -201,7 +201,7 @@
+ # can get to the files in /data/misc/incidents
+ #
+ # write, execute, append are forbidden almost everywhere
+-neverallow { domain -incidentd -init -vold } incident_data_file:file {
++neverallow { domain -incidentd -init -vold recovery_only(`-recovery') } incident_data_file:file {
+   w_file_perms
+   x_file_perms
+   create
+@@ -211,7 +211,7 @@
+   append
+ };
+ # read is also allowed by system_server, for when the file is handed to dropbox
+-neverallow { domain -incidentd -init -vold -system_server } incident_data_file:file r_file_perms;
++neverallow { domain -incidentd -init -vold -system_server  recovery_only(`-recovery') } incident_data_file:file r_file_perms;
+ # limited access to the directory itself
+-neverallow { domain -incidentd -init -vold } incident_data_file:dir create_dir_perms;
++neverallow { domain -incidentd -init -vold  recovery_only(`-recovery') } incident_data_file:dir create_dir_perms;
+ 
+--- a/system/sepolicy/private/logpersist.te
++++ b/system/sepolicy/private/logpersist.te
+@@ -26,6 +26,6 @@
+   userdebug_or_eng(`-misc_logd_file -coredump_file')
+   with_native_coverage(`-method_trace_data_file')
+ }:file { create write append };
+-neverallow { domain -init -dumpstate -incidentd userdebug_or_eng(`-logpersist -logd') } misc_logd_file:file no_rw_file_perms;
+-neverallow { domain -init userdebug_or_eng(`-logpersist -logd') } misc_logd_file:file no_w_file_perms;
+-neverallow { domain -init userdebug_or_eng(`-logpersist -logd') } misc_logd_file:dir { add_name link relabelfrom remove_name rename reparent rmdir write };
++neverallow { domain -init -dumpstate -incidentd userdebug_or_eng(`-logpersist -logd')  recovery_only(`-recovery') } misc_logd_file:file no_rw_file_perms;
++neverallow { domain -init userdebug_or_eng(`-logpersist -logd')  recovery_only(`-recovery') } misc_logd_file:file no_w_file_perms;
++neverallow { domain -init userdebug_or_eng(`-logpersist -logd')  recovery_only(`-recovery') } misc_logd_file:dir { add_name link relabelfrom remove_name rename reparent rmdir write };
+--- a/system/sepolicy/private/mlstrustedsubject.te
++++ b/system/sepolicy/private/mlstrustedsubject.te
+@@ -6,18 +6,21 @@
+ 
+ neverallow {
+   mlstrustedsubject
++  recovery_only(`-recovery')
+   -artd # compile secondary dex files
+   -installd
+ } { app_data_file privapp_data_file }:file ~{ read write map getattr ioctl lock append };
+ 
+ neverallow {
+   mlstrustedsubject
++  recovery_only(`-recovery')
+   -artd # compile secondary dex files
+   -installd
+ } { app_data_file privapp_data_file }:dir ~{ read getattr search };
+ 
+ neverallow {
+   mlstrustedsubject
++  recovery_only(`-recovery')
+   -artd # compile secondary dex files
+   -installd
+   -system_server
+--- a/system/sepolicy/private/odrefresh.te
++++ b/system/sepolicy/private/odrefresh.te
+@@ -52,9 +52,9 @@
+ dontaudit odrefresh adbd:unix_stream_socket { getattr read write };
+ 
+ # No other processes should be creating files in the staging area.
+-neverallow { domain -init -odrefresh -compos_fd_server } apex_art_staging_data_file:file open;
++neverallow { domain -init -odrefresh -compos_fd_server  recovery_only(`-recovery') } apex_art_staging_data_file:file open;
+ 
+ # No processes other than init, odrefresh and system_server access
+ # odrefresh_data_files.
+-neverallow { domain -init -odrefresh -system_server } odrefresh_data_file:dir *;
+-neverallow { domain -init -odrefresh -system_server } odrefresh_data_file:file *;
++neverallow { domain -init -odrefresh -system_server  recovery_only(`-recovery') } odrefresh_data_file:dir *;
++neverallow { domain -init -odrefresh -system_server  recovery_only(`-recovery') } odrefresh_data_file:file *;
+--- a/system/sepolicy/private/odsign.te
++++ b/system/sepolicy/private/odsign.te
+@@ -65,5 +65,5 @@
+ set_prop(odsign, ctl_odsign_prop)
+ 
+ # Neverallows
+-neverallow { domain -odsign -init -fsverity_init} odsign_data_file:dir ~search;
+-neverallow { domain -odsign -init -fsverity_init} odsign_data_file:file *;
++neverallow { domain -odsign -init -fsverity_init recovery_only(`-recovery') } odsign_data_file:dir ~search;
++neverallow { domain -odsign -init -fsverity_init recovery_only(`-recovery') } odsign_data_file:file *;
+--- a/system/sepolicy/private/perfetto.te
++++ b/system/sepolicy/private/perfetto.te
+@@ -91,7 +91,7 @@
+   -incidentd # For receiving reported traces. TODO(lalitm): remove this.
+   -priv_app  # For stating traces for bug-report UI.
+   -system_server # For accessing traces started by profiling apis.
+-} perfetto_traces_data_file:dir *;
++ recovery_only(`-recovery') } perfetto_traces_data_file:dir *;
+ neverallow {
+   domain
+   -init      # The creator of the folder.
+@@ -100,7 +100,7 @@
+   -shell     # For devepment purposes.
+   -traced    # For write_into_file traces.
+   -incidentd      # For receiving reported traces. TODO(lalitm): remove this.
+-} perfetto_traces_data_file:file ~{ getattr read };
++ recovery_only(`-recovery') } perfetto_traces_data_file:file ~{ getattr read };
+ 
+ ### perfetto should NEVER do any of the following
+ 
+--- a/system/sepolicy/private/property.te
++++ b/system/sepolicy/private/property.te
+@@ -677,6 +677,7 @@
+ neverallow {
+   domain
+   -init
++  recovery_only(`-recovery')
+ } default_prop:property_service set;
+ 
+ # Only one of system_property_type and vendor_property_type can be assigned.
+--- a/system/sepolicy/private/sdk_sandbox_all.te
++++ b/system/sepolicy/private/sdk_sandbox_all.te
+@@ -96,7 +96,7 @@
+     -system_server
+     -vold_prepare_subdirs
+     -zygote
+-} sdk_sandbox_system_data_file:dir { create_dir_perms relabelto };
++ recovery_only(`-recovery') } sdk_sandbox_system_data_file:dir { create_dir_perms relabelto };
+ 
+ # Only certain system components should have access to sdk_sandbox_all_system_data_file
+ # sdk_sandbox_all only needs search. Restricted in follow up neverallow rule.
+@@ -116,11 +116,11 @@
+     -system_server
+     -vold_prepare_subdirs
+     -zygote
+-} sdk_sandbox_system_data_file:dir { create_dir_perms relabelto };
++ recovery_only(`-recovery') } sdk_sandbox_system_data_file:dir { create_dir_perms relabelto };
+ 
+ # sdk_sandbox_all only needs to traverse through the sdk_sandbox_all_system_data_file
+ neverallow sdk_sandbox_all sdk_sandbox_system_data_file:dir ~{ getattr search };
+ 
+ # Only dirs should be created at sdk_sandbox_all_system_data_file level
+-neverallow { domain -init } sdk_sandbox_system_data_file:file *;
++neverallow { domain -init  recovery_only(`-recovery') } sdk_sandbox_system_data_file:file *;
+ 
+--- a/system/sepolicy/private/su.te
++++ b/system/sepolicy/private/su.te
+@@ -24,7 +24,7 @@
+   virtualizationservice_use(su)
+ 
+   # su is also permissive to permit setenforce.
+-  permissive su;
++  not_recovery(`permissive su;')
+ 
+   app_domain(su)
+ 
+--- a/system/sepolicy/private/system_server.te
++++ b/system/sepolicy/private/system_server.te
+@@ -1314,7 +1314,7 @@
+ neverallow system_server perfetto_traces_data_file:dir ~search;
+ 
+ # Only allow crash_dump to connect to system_ndebug_socket.
+-neverallow { domain -init -system_server -crash_dump } system_ndebug_socket:sock_file { open write };
++neverallow { domain -init -system_server -crash_dump  recovery_only(`-recovery') } system_ndebug_socket:sock_file { open write };
+ 
+ # Only allow zygotes to connect to system_unsolzygote_socket.
+ neverallow {
+@@ -1324,7 +1324,7 @@
+   -zygote
+   -app_zygote
+   -webview_zygote
+-} system_unsolzygote_socket:sock_file { open write };
++ recovery_only(`-recovery') } system_unsolzygote_socket:sock_file { open write };
+ 
+ # Only allow init, system_server, flags_health_check to set properties for server configurable flags
+ neverallow {
+@@ -1576,8 +1576,8 @@
+ neverallowxperm { domain -system_server } binder_device:chr_file ioctl { BINDER_FREEZE BINDER_GET_FROZEN_INFO };
+ 
+ # Only system server can write the font files.
+-neverallow { domain -init -system_server } font_data_file:file no_w_file_perms;
+-neverallow { domain -init -system_server } font_data_file:dir no_w_dir_perms;
++neverallow { domain -init -system_server  recovery_only(`-recovery') } font_data_file:file no_w_file_perms;
++neverallow { domain -init -system_server  recovery_only(`-recovery') } font_data_file:dir no_w_dir_perms;
+ 
+ # Allow reading /system/etc/font_fallback.xml
+ allow system_server system_font_fallback_file:file r_file_perms;
+--- a/system/sepolicy/private/virtualizationservice.te
++++ b/system/sepolicy/private/virtualizationservice.te
+@@ -106,7 +106,7 @@
+   -init
+   -virtualizationmanager
+   -virtualizationservice
+-} virtualizationservice_data_file:file { open create };
++ recovery_only(`-recovery') } virtualizationservice_data_file:file { open create };
+ 
+ neverallow virtualizationservice {
+   domain
+--- a/system/sepolicy/private/vold.te
++++ b/system/sepolicy/private/vold.te
+@@ -90,7 +90,7 @@
+ neverallow {
+     domain
+     -vold
+-} {
++ recovery_only(`-recovery') } {
+     media_userdir_file
+     system_userdir_file
+     vendor_userdir_file
+--- a/system/sepolicy/public/app.te
++++ b/system/sepolicy/public/app.te
+@@ -121,7 +121,7 @@
+ neverallow { appdomain -bluetooth }
+     bluetooth_data_file:dir_file_class_set
+     { create write setattr relabelfrom relabelto append unlink link rename };
+-neverallow { domain -credstore -init } credstore_data_file:dir_file_class_set *;
++neverallow { domain -credstore -init  recovery_only(`-recovery') } credstore_data_file:dir_file_class_set *;
+ neverallow appdomain
+     keystore_data_file:dir_file_class_set
+     { create write setattr relabelfrom relabelto append unlink link rename };
+--- a/system/sepolicy/public/domain.te
++++ b/system/sepolicy/public/domain.te
+@@ -366,7 +366,7 @@
+ neverallowxperm * devpts:chr_file ioctl TIOCSTI;
+ 
+ # Do not allow any domain other than init to create unlabeled files.
+-neverallow { domain -init -recovery } unlabeled:dir_file_class_set create;
++neverallow { domain -init -recovery recovery_only(`-mtk_recovery_tee') } unlabeled:dir_file_class_set create;
+ 
+ # Limit device node creation to these allowed domains.
+ neverallow {
+@@ -453,7 +453,7 @@
+ 
+ # Don't allow raw read/write/open access to block_device
+ # Rather force a relabel to a more specific type
+-neverallow { domain -kernel -init -recovery } block_device:blk_file { open read write };
++neverallow { domain -kernel -init -recovery recovery_only(`-fastbootd') } block_device:blk_file { open read write };
+ 
+ # Do not allow renaming of block files or character files
+ # Ability to do so can lead to possible use in an exploit chain
+@@ -465,25 +465,25 @@
+ neverallow domain device:chr_file { open read write };
+ 
+ # Files from cache should never be executed
+-neverallow domain { cache_file cache_backup_file cache_private_backup_file cache_recovery_file }:file execute;
++neverallow { domain recovery_only(`-recovery') } { cache_file cache_backup_file cache_private_backup_file cache_recovery_file }:file execute;
+ 
+ # The test files and executables MUST not be accessible to any domain
+-neverallow { domain userdebug_or_eng(`-kernel') } nativetest_data_file:file_class_set no_w_file_perms;
+-neverallow domain nativetest_data_file:dir no_w_dir_perms;
+-neverallow { domain userdebug_or_eng(`-shell') } nativetest_data_file:file no_x_file_perms;
+-
+-neverallow { domain -shell -init -adbd } shell_test_data_file:file_class_set no_w_file_perms;
+-neverallow { domain -shell -init -adbd } shell_test_data_file:dir no_w_dir_perms;
+-neverallow { domain -shell -init -adbd -heapprofd -crash_dump } shell_test_data_file:file *;
++neverallow { domain userdebug_or_eng(`-kernel')  recovery_only(`-recovery') } nativetest_data_file:file_class_set no_w_file_perms;
++neverallow { domain recovery_only(`-recovery') } nativetest_data_file:dir no_w_dir_perms;
++neverallow { domain userdebug_or_eng(`-shell')  recovery_only(`-recovery') } nativetest_data_file:file no_x_file_perms;
++
++neverallow { domain -shell -init -adbd  recovery_only(`-recovery') } shell_test_data_file:file_class_set no_w_file_perms;
++neverallow { domain -shell -init -adbd  recovery_only(`-recovery') } shell_test_data_file:dir no_w_dir_perms;
++neverallow { domain -shell -init -adbd -heapprofd -crash_dump  recovery_only(`-recovery') } shell_test_data_file:file *;
+ neverallow heapprofd shell_test_data_file:file { no_w_file_perms no_x_file_perms };
+-neverallow { domain -shell -init -adbd } shell_test_data_file:sock_file *;
++neverallow { domain -shell -init -adbd  recovery_only(`-recovery') } shell_test_data_file:sock_file *;
+ 
+ # Only the init property service should write to /data/property and /dev/__properties__
+-neverallow { domain -init } property_data_file:dir no_w_dir_perms;
+-neverallow { domain -init } property_data_file:file { no_w_file_perms no_x_file_perms };
+-neverallow { domain -init } property_type:file { no_w_file_perms no_x_file_perms };
++neverallow { domain -init  recovery_only(`-recovery') } property_data_file:dir no_w_dir_perms;
++neverallow { domain -init  recovery_only(`-recovery') } property_data_file:file { no_w_file_perms no_x_file_perms };
++neverallow { domain -init recovery_only(`-recovery') } property_type:file { no_w_file_perms no_x_file_perms };
+ neverallow { domain -init } properties_device:file { no_w_file_perms no_x_file_perms };
+-neverallow { domain -init } properties_serial:file { no_w_file_perms no_x_file_perms };
++neverallow { domain -init recovery_only(`-recovery') } properties_serial:file { no_w_file_perms no_x_file_perms };
+ 
+ # Nobody should be doing writes to /system & /vendor
+ # These partitions are intended to be read-only and must never be
+@@ -493,6 +493,7 @@
+     domain
+     with_asan(`-asan_extract')
+     recovery_only(`userdebug_or_eng(`-fastbootd')')
++    recovery_only(`-init -recovery')
+ } {
+     system_file_type
+     vendor_file_type
+@@ -564,7 +565,7 @@
+ dontaudit domain future_pm_prop:file read;
+ 
+ neverallow { domain -init } aac_drc_prop:property_service set;
+-neverallow { domain -init } build_prop:property_service set;
++neverallow { domain -init recovery_only(`-recovery') } build_prop:property_service set;
+ neverallow { domain -init } userdebug_or_eng_prop:property_service set;
+ 
+ # Do not allow reading device's serial number from system properties except form
+@@ -723,7 +724,7 @@
+     -data_between_core_and_vendor_violators # b/70393317
+     -socket_between_core_and_vendor_violators
+     -vendor_init
+-  } {
++   recovery_only(`-recovery') } {
+     coredomain_socket
+     core_data_file_type
+     unlabeled # used only by core domains
+@@ -733,7 +734,7 @@
+   neverallow {
+     appdomain
+     -coredomain
+-  } {
++   recovery_only(`-recovery') } {
+     coredomain_socket
+     unlabeled # used only by core domains
+     core_data_file_type
+@@ -751,7 +752,7 @@
+     -init
+     -ueventd
+     -socket_between_core_and_vendor_violators
+-  } {
++   recovery_only(`-recovery') } {
+     file_type
+     dev_type
+     -coredomain_socket
+@@ -778,7 +779,7 @@
+     -data_between_core_and_vendor_violators
+     -init
+     -vold_prepare_subdirs
+-  } {
++   recovery_only(`-recovery') } {
+     data_file_type
+     -core_data_file_type
+     -app_data_file_type
+@@ -791,7 +792,7 @@
+     -data_between_core_and_vendor_violators
+     -init
+     -vold_prepare_subdirs
+-    } {
++     recovery_only(`-recovery') } {
+       data_file_type
+       -core_data_file_type
+       -app_data_file_type
+@@ -809,7 +810,7 @@
+     -coredomain
+     -data_between_core_and_vendor_violators # TODO(b/34980020) Remove once all violators have been cleaned up
+     -vendor_init
+-  } {
++   recovery_only(`-recovery') } {
+     core_data_file_type
+     with_native_coverage(`-method_trace_data_file')
+   }:file_class_set ~{ append getattr ioctl read write map };
+@@ -833,7 +834,7 @@
+     -coredomain
+     -data_between_core_and_vendor_violators
+     -vendor_init
+-  } {
++   recovery_only(`-recovery') } {
+     core_data_file_type
+     -system_data_file # default label for files on /data. Covered below...
+     -system_data_root_file
+@@ -864,7 +865,7 @@
+     -appdomain # TODO(b/34980020) remove exemption for appdomain
+     -coredomain
+     -data_between_core_and_vendor_violators # TODO(b/34980020) Remove once all violators have been cleaned up
+-    } {
++     recovery_only(`-recovery') } {
+       system_data_file # default label for files on /data. Covered below
+     }:dir ~{ getattr search };
+ ')
+@@ -877,7 +878,7 @@
+     -init
+     -vold # vold creates per-user storage for both system and vendor
+     -vold_prepare_subdirs
+-    } {
++     recovery_only(`-recovery') } {
+       vendor_data_file # default label for files on /data. Covered below
+     }:dir ~{ getattr search };
+ ')
+@@ -888,7 +889,7 @@
+     coredomain
+     -data_between_core_and_vendor_violators # TODO(b/34980020) Remove once all violators have been cleaned up
+     -init
+-    } {
++     recovery_only(`-recovery') } {
+       vendor_data_file # default label for files on /data/vendor{,_ce,_de}.
+     }:file_class_set ~{ append getattr ioctl read write map };
+ ')
+@@ -1025,7 +1026,7 @@
+ neverallow { domain -dumpstate -incidentd -system_server } tombstoned_intercept_socket:unix_stream_socket connectto;
+ 
+ # Never allow anyone but system_server to read heapdumps in /data/system/heapdump.
+-neverallow { domain -init -system_server } heapdump_data_file:file read;
++neverallow { domain -init -system_server  recovery_only(`-recovery') } heapdump_data_file:file read;
+ 
+ # Android does not support System V IPCs.
+ #
+@@ -1103,7 +1104,7 @@
+   -installd # for relabelfrom and unlink, check for this in explicit neverallow
+   -vold_prepare_subdirs # For unlink
+   with_asan(`-asan_extract')
+-} system_data_file:file no_w_file_perms;
++ recovery_only(`-recovery') } system_data_file:file no_w_file_perms;
+ # do not grant anything greater than r_file_perms and relabelfrom unlink
+ # to installd
+ neverallow installd system_data_file:file ~{ r_file_perms relabelfrom unlink };
+@@ -1135,14 +1136,14 @@
+   -appdomain
+   -artd
+   -installd
+-} { app_data_file privapp_data_file }:lnk_file read;
++ recovery_only(`-recovery') } { app_data_file privapp_data_file }:lnk_file read;
+ 
+ neverallow {
+   domain
+   -shell
+   userdebug_or_eng(`-uncrypt')
+   -installd
+-} shell_data_file:lnk_file read;
++ recovery_only(`-recovery') } shell_data_file:lnk_file read;
+ 
+ # servicemanager and vndservicemanager are the only processes which handle the
+ # service_manager list request
+@@ -1254,6 +1255,7 @@
+   -ueventd
+   -vold
+   -system_writes_mnt_vendor_violators
++    recovery_only(`-recovery -mtk_recovery_tee -hal_gatekeeper_default -hal_keymint_default')
+ } mnt_vendor_file:dir *;
+ 
+ # Only apps are allowed access to vendor public libraries.
+--- a/system/sepolicy/public/flags_health_check.te
++++ b/system/sepolicy/public/flags_health_check.te
+@@ -8,4 +8,4 @@
+ # server_configurable_flags_data_file is used for storing whether server configurable flags which
+ # have been reset during current booting. Mistakenly modified by unrelated components can
+ # cause bad server configurable flags synced back to device.
+-neverallow { domain -init -flags_health_check } server_configurable_flags_data_file:file no_w_file_perms;
++neverallow { domain -init -flags_health_check  recovery_only(`-recovery') } server_configurable_flags_data_file:file no_w_file_perms;
+--- a/system/sepolicy/public/init.te
++++ b/system/sepolicy/public/init.te
+@@ -693,4 +693,4 @@
+ # init owns the root of /data
+ # TODO(b/140259336) We want to remove vendor_init
+ # TODO(b/141108496) We want to remove toolbox
+-neverallow { domain -init -toolbox -vendor_init -vold } system_data_root_file:dir { write add_name remove_name };
++neverallow { domain -init -toolbox -vendor_init -vold  recovery_only(`-recovery') } system_data_root_file:dir { write add_name remove_name };
+--- a/system/sepolicy/public/keystore.te
++++ b/system/sepolicy/public/keystore.te
+@@ -36,11 +36,11 @@
+ ### Protect ourself from others
+ ###
+ 
+-neverallow { domain -keystore } keystore_data_file:dir ~{ open create read getattr setattr search relabelto ioctl };
+-neverallow { domain -keystore } keystore_data_file:notdevfile_class_set ~{ relabelto getattr };
++neverallow { domain -keystore  recovery_only(`-recovery') } keystore_data_file:dir ~{ open create read getattr setattr search relabelto ioctl };
++neverallow { domain -keystore  recovery_only(`-recovery') } keystore_data_file:notdevfile_class_set ~{ relabelto getattr };
+ 
+-neverallow { domain -keystore -init } keystore_data_file:dir *;
+-neverallow { domain -keystore -init } keystore_data_file:notdevfile_class_set *;
++neverallow { domain -keystore -init  recovery_only(`-recovery') } keystore_data_file:dir *;
++neverallow { domain -keystore -init  recovery_only(`-recovery') } keystore_data_file:notdevfile_class_set *;
+ 
+ # TODO(b/186868271): Remove the crash dump exception soon-ish (maybe by May 14, 2021?)
+ neverallow { domain userdebug_or_eng(`-crash_dump') } keystore:process ptrace;
+--- a/system/sepolicy/public/recovery.te
++++ b/system/sepolicy/public/recovery.te
+@@ -157,6 +157,7 @@
+ # domains, including recovery.
+ #
+ # TODO: tighten this up further.
++not_recovery(`
+ neverallow recovery {
+    data_file_type
+    -cache_file
+@@ -169,3 +170,5 @@
+    -cache_recovery_file
+   with_native_coverage(`-method_trace_data_file')
+ }:dir no_w_dir_perms;
++
++')
+--- a/system/sepolicy/public/statsd.te
++++ b/system/sepolicy/public/statsd.te
+@@ -91,10 +91,10 @@
+ # Only statsd and the other root services in limited circumstances.
+ # can get to the files in /data/misc/stats-data, /data/misc/stats-service.
+ # Other services are prohibitted from accessing the file.
+-neverallow { domain -statsd -init -vold } stats_data_file:file *;
+-neverallow { domain -statsd -system_server -init -vold } stats_config_data_file:file *;
++neverallow { domain -statsd -init -vold recovery_only(`-recovery') } stats_data_file:file *;
++neverallow { domain -statsd -system_server -init -vold  recovery_only(`-recovery') } stats_config_data_file:file *;
+ 
+ 
+ # Limited access to the directory itself.
+-neverallow { domain -statsd -init -vold } stats_data_file:dir *;
+-neverallow { domain -statsd -system_server -init -vold } stats_config_data_file:dir *;
++neverallow { domain -statsd -init -vold  recovery_only(`-recovery') } stats_data_file:dir *;
++neverallow { domain -statsd -system_server -init -vold  recovery_only(`-recovery') } stats_config_data_file:dir *;
+--- a/system/sepolicy/public/vold.te
++++ b/system/sepolicy/public/vold.te
+@@ -60,13 +60,13 @@
+   -vold
+   -init
+   -vendor_init
+-} data_file_type:dir ioctl { FS_IOC_SET_ENCRYPTION_POLICY };
++ recovery_only(`-recovery') } data_file_type:dir ioctl { FS_IOC_SET_ENCRYPTION_POLICY };
+ 
+ # Only vold should ever add/remove file-based encryption keys.
+ neverallowxperm {
+   domain
+   -vold
+-} data_file_type:dir ioctl { FS_IOC_ADD_ENCRYPTION_KEY FS_IOC_REMOVE_ENCRYPTION_KEY FS_IOC_GET_ENCRYPTION_KEY_STATUS };
++ recovery_only(`-recovery') } data_file_type:dir ioctl { FS_IOC_ADD_ENCRYPTION_KEY FS_IOC_REMOVE_ENCRYPTION_KEY FS_IOC_GET_ENCRYPTION_KEY_STATUS };
+ 
+ # Allow securely erasing crypto key files. F2FS_IOC_SEC_TRIM_FILE is
+ # tried first. Otherwise, FS_IOC_FIEMAP is needed to get the
+@@ -296,19 +296,20 @@
+     domain
+     -vold
+     -vold_prepare_subdirs
+-} vold_data_file:dir ~{ open create read getattr setattr search relabelfrom relabelto ioctl };
++ recovery_only(`-recovery') } vold_data_file:dir ~{ open create read getattr setattr search relabelfrom relabelto ioctl };
+ 
+ neverallow {
+     domain
+     -init
+     -vold
+     -vold_prepare_subdirs
+-} vold_data_file:dir *;
++ recovery_only(`-recovery') } vold_data_file:dir *;
+ 
+ neverallow {
+     domain
+     -init
+     -vold
++    recovery_only(`-recovery')
+ } vold_metadata_file:dir *;
+ 
+ neverallow {
+@@ -316,13 +317,14 @@
+     -kernel
+     -vold
+     -vold_prepare_subdirs
+-} vold_data_file:notdevfile_class_set ~{ relabelto getattr };
++ recovery_only(`-recovery') } vold_data_file:notdevfile_class_set ~{ relabelto getattr };
+ 
+ neverallow {
+     domain
+     -init
+     -vold
+     -vold_prepare_subdirs
++    recovery_only(`-recovery')
+ } vold_metadata_file:notdevfile_class_set ~{ relabelto getattr };
+ 
+ neverallow {
+@@ -331,9 +333,9 @@
+     -kernel
+     -vold
+     -vold_prepare_subdirs
+-} { vold_data_file vold_metadata_file }:notdevfile_class_set *;
++ recovery_only(`-recovery') } { vold_data_file vold_metadata_file }:notdevfile_class_set *;
+ 
+-neverallow { domain -vold -init } restorecon_prop:property_service set;
++neverallow { domain -vold -init recovery_only(`-recovery') } restorecon_prop:property_service set;
+ 
+ neverallow vold {
+   domain
+--- a/system/vold/Decrypt.cpp
++++ b/system/vold/Decrypt.cpp
+@@ -93,7 +93,6 @@
+ 
+ using ::aidl::android::hardware::security::keymint::HardwareAuthenticatorType;
+ using ::aidl::android::hardware::security::keymint::HardwareAuthToken;
+-using ::aidl::android::hardware::security::keymint::km_utils::authToken2AidlVec;
+ using aidl::android::system::keystore2::IKeystoreService;
+ using android::security::keymaster::OperationResult;
+ using android::hardware::keymaster::V4_1::support::blob2hidlVec;
+@@ -571,6 +570,10 @@
+ 			ks2::KeyEntryResponse keyEntryResponse;
+ 			::ndk::SpAIBinder keystoreBinder(AServiceManager_checkService("android.system.keystore2.IKeystoreService/default"));
+ 			auto keystore = ks2::IKeystoreService::fromBinder(keystoreBinder);
++			if (!keystore) {
++				printf("Could not connect to keystore2 service\n");
++				return disk_decryption_secret_key;
++			}
+ 			auto rc = keystore->getKeyEntry(keyDescriptor(keystore_alias), &keyEntryResponse);
+ 			if (!rc.isOk()) {
+ 				auto error = unwrapError(rc);
+@@ -588,7 +591,7 @@
+ 				keyResponse.metadata.key, begin_params.vector_data(), true,
+ 				&encOperationResponse);
+ 			if (!begin_rc.isOk()) {
+-				printf("Begin Operation failed\n");
++				printf("Begin Operation failed: %s\n", begin_rc.getDescription().c_str());
+ 				return disk_decryption_secret_key;
+ 			}
+ 			std::optional<std::vector<uint8_t>> optPlaintext;
+@@ -844,6 +847,7 @@
+ 			}
+ 
+ 			GKResponse gkResponse;
++			HardwareAuthToken authToken;
+ 			if (aidl_gk_device) {
+ 				if (pwd.handle_len <= 0) {
+ 					printf("no password handle supplied\n");
+@@ -862,10 +866,15 @@
+ 				auto result = aidl_gk_device->verify(fakeUid(user_id), 0 /* challenge */, pwd_handle_hidl, gk_pwd_token_hidl, &rsp);
+ 				free(gk_pwd_token);
+ 
++				if (!result.isOk()) {
++					printf("Gatekeeper AIDL verify failed: %s\n", result.getDescription().c_str());
++					return Free_Return(retval, weaver_key, &pwd);
++				}
+ 				if (rsp.statusCode >= AidlIGatekeeper::STATUS_OK) {
+-					// Serialize HardwareAuthToken to a vector as hw_auth_token_t.
+ 					printf("GateKeeper status ok\n");
+-					gkResponse = GKResponse::ok(authToken2AidlVec(rsp.hardwareAuthToken));
++					// AIDL already uses the KeyMint token type. Preserve its fields directly.
++					authToken = rsp.hardwareAuthToken;
++					gkResponse = GKResponse::ok({});
+ 				} else if (rsp.statusCode == AidlIGatekeeper::ERROR_RETRY_TIMEOUT) {
+ 					printf("GateKeeper response timeout\n");
+ 					gkResponse = GKResponse::retry(rsp.timeoutMs);
+@@ -919,28 +928,45 @@
+ 					return Free_Return(retval, weaver_key, &pwd);
+ 				}
+ 			}
+-			if (gkResponse.response_code() == GKResponseCode::OK) {
+-				if (gkResponse.payload().size() != 0) {
+-					const hw_auth_token_t* hwAuthToken =
+-						reinterpret_cast<const hw_auth_token_t*>(gkResponse.payload().data());
+-					HardwareAuthToken authToken;
+-					authToken.timestamp.milliSeconds = betoh64(hwAuthToken->timestamp);
+-					authToken.challenge = hwAuthToken->challenge;
+-					authToken.userId = hwAuthToken->user_id;
+-					authToken.authenticatorId = hwAuthToken->authenticator_id;
+-					authToken.authenticatorType = static_cast<HardwareAuthenticatorType>(
+-							betoh32(hwAuthToken->authenticator_type));
+-					authToken.mac.assign(&hwAuthToken->hmac[0], &hwAuthToken->hmac[32]);
+-					AIBinder* authzAIBinder = AServiceManager_getService("android.security.authorization");
+-					::ndk::SpAIBinder binder(authzAIBinder);
+-					auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
+-					if (service == NULL) {
+-						printf("error: could not connect to keystore service\n");
+-						ALOGE("error: could not connect to keystore service\n");
+-					}
+-					auto binder_result = service->addAuthToken(authToken);
++			if (gkResponse.response_code() != GKResponseCode::OK) {
++				printf("Gatekeeper did not verify the credential\n");
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			if (!aidl_gk_device) {
++				const auto& payload = gkResponse.payload();
++				if (payload.size() != sizeof(hw_auth_token_t)) {
++					printf("Gatekeeper HIDL returned an invalid auth token size: %zu\n", payload.size());
++					return Free_Return(retval, weaver_key, &pwd);
+ 				}
++				hw_auth_token_t hwAuthToken;
++				memcpy(&hwAuthToken, payload.data(), sizeof(hwAuthToken));
++				authToken.timestamp.milliSeconds = betoh64(hwAuthToken.timestamp);
++				authToken.challenge = hwAuthToken.challenge;
++				authToken.userId = hwAuthToken.user_id;
++				authToken.authenticatorId = hwAuthToken.authenticator_id;
++				authToken.authenticatorType = static_cast<HardwareAuthenticatorType>(
++						betoh32(hwAuthToken.authenticator_type));
++				authToken.mac.assign(&hwAuthToken.hmac[0], &hwAuthToken.hmac[32]);
++			}
++			if (authToken.mac.size() != 32) {
++				printf("Gatekeeper returned an invalid auth token MAC size: %zu\n", authToken.mac.size());
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			// Report only token shape, never its MAC, SID, challenge, or timestamp.
++			printf("Gatekeeper auth token ready (authType=%d, MAC bytes=%zu)\n",
++					static_cast<int32_t>(authToken.authenticatorType), authToken.mac.size());
++			::ndk::SpAIBinder binder(AServiceManager_getService("android.security.authorization"));
++			auto service = aidl::android::security::authorization::IKeystoreAuthorization::fromBinder(binder);
++			if (!service) {
++				printf("Could not connect to keystore authorization service\n");
++				return Free_Return(retval, weaver_key, &pwd);
++			}
++			auto binder_result = service->addAuthToken(authToken);
++			if (!binder_result.isOk()) {
++				printf("Keystore addAuthToken failed: %s\n", binder_result.getDescription().c_str());
++				return Free_Return(retval, weaver_key, &pwd);
+ 			}
++			printf("Gatekeeper auth token accepted by keystore\n");
+ 
+ 		}
+ 	}
+--- a/vendor/recovery/FoxExtras/sbin/foxstart.sh
++++ b/vendor/recovery/FoxExtras/sbin/foxstart.sh
+@@ -38,7 +38,7 @@
+ ANDROID_SDK="31"  # assume at least Android 12 in sdk checks
+ MOUNT_CMD="mount -r" # only mount in readonly mode
+ SUPER="0" # whether the device has a "super" partition
+-OUR_TMP="/FFiles/temp" # our "safe" temp directory
++OUR_TMP="/tmp/fox" # our "safe" temp directory
+ 
+ # whether this is a vAB or vanilla build
+ VIRTUAL_AB=$(getprop "ro.orangefox.virtual_ab")
+@@ -531,7 +531,10 @@
+    local rc=$ETC_DIR/bash/bashrc
+    [ ! -f $rc ] && rc=$ETC_DIR/bashrc
+    [ ! -f $rc ] && rc=$ETC_DIR/bash.bashrc
+-   [ -f $rc ] && cp $rc /.bashrc
++   if [ -f "$rc" ]; then
++     cp "$rc" /tmp/fox.bashrc
++     [ -L /.bashrc ] || ln -s /tmp/fox.bashrc /.bashrc
++   fi
+ }
+ 
+ # try to get display panel information
+@@ -567,19 +570,14 @@
+ 
+ # post-init stuff
+ post_init() {
+-  local M="/FFiles/magiskboot_new"
+-  [ -f $M ] && chmod 0755 $M
+-  M="/FFiles/fox_fix_date"
+-  [ -f $M ] && chmod 0755 $M
+-
+   # write OrangeFox props to the log
+   echo "DEBUG: OrangeFox: Fox properties:" >> $LOG
+   getprop | grep 'orangefox' >> $LOG
+ 
+   # use new magisk uninstall zip for saving space
+   local MZ="/FFiles/OF_Magisk/Magisk.zip"
+-  if [ -e $MZ ]; then
+-     cp $MZ /FFiles/OF_Magisk/uninstall.zip
++  if [ -e "$MZ" ] && [ ! -e /FFiles/OF_Magisk/uninstall.zip ]; then
++     ln -s "$MZ" /FFiles/OF_Magisk/uninstall.zip
+   fi
+ }
+ 
+--- a/vendor/recovery/OrangeFox_vendor.sh
++++ b/vendor/recovery/OrangeFox_vendor.sh
+@@ -582,7 +582,11 @@
+ 	fi
+      fi
+ 
+-     $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     if [ -n "$recovery_uncompressed_ramdisk" ] && [ -f "$recovery_uncompressed_ramdisk" ]; then
++        $CP -p "$recovery_uncompressed_ramdisk" "$VBtmp/vendor_ramdisk_recovery.cpio" || abort 203
++     else
++        $FOX_VENDOR_PATH/tools/magiskboot unpack -n tmp.img
++     fi
+      F="vendor_ramdisk_recovery.cpio"; #v4+ header
+      [ ! -f $F ] && F="vendor_ramdisk/recovery.cpio"; #v4+ header+latest magiskboot canary
+      [ ! -f $F ] && F="ramdisk.cpio"; #v3 or earlier header
+@@ -1262,7 +1266,21 @@
+   # build standard (3GB) version
+   # copy over vendor FFiles/ and vendor sbin/ stuff before creating the boot image
+   #[ "$FOX_BUILD_DEBUG_MESSAGES" = "1" ] && echo "- FOX_BUILD_DEBUG_MESSAGES: Copying: $FOX_VENDOR_PATH/FoxExtras/* to $FOX_RAMDISK/"
++  for fox_helper in fox_fix_date ps magiskboot_new; do
++    [ ! -L "$FOX_RAMDISK/FFiles/$fox_helper" ] || rm -f "$FOX_RAMDISK/FFiles/$fox_helper"
++  done
+   $CP -pr $FOX_VENDOR_PATH/FoxExtras/* $FOX_RAMDISK/
++  mkdir -p "$FOX_RAMDISK/$RAMDISK_SBIN"
++  for fox_helper in fox_fix_date magiskboot_new; do
++    [ -f "$FOX_RAMDISK/FFiles/$fox_helper" ] || continue
++    fox_helper_bin="$fox_helper"
++    mv -f "$FOX_RAMDISK/FFiles/$fox_helper" "$FOX_RAMDISK/$RAMDISK_SBIN/$fox_helper_bin"
++    chmod 0755 "$FOX_RAMDISK/$RAMDISK_SBIN/$fox_helper_bin"
++    ln -s "/${RAMDISK_SBIN#/}/$fox_helper_bin" "$FOX_RAMDISK/FFiles/$fox_helper"
++  done
++  rm -f "$FOX_RAMDISK/FFiles/ps" "$FOX_RAMDISK/$RAMDISK_SBIN/fox_ps"
++  ln -s /system/bin/ps "$FOX_RAMDISK/FFiles/ps"
++  unset fox_helper fox_helper_bin
+ 
+   # if these directories don't already exist
+   mkdir -p $FOX_RAMDISK/$RAMDISK_ETC/
+--- a/vendor/twrp/build/sepolicy/private/twrp.te
++++ b/vendor/twrp/build/sepolicy/private/twrp.te
+@@ -1,11 +1,4 @@
+ recovery_only(`
+-  permissive recovery;
+-  permissive init;
+-  permissive logd;
+-  permissive adbd;
+-  permissive fastbootd;
+-  permissive postinstall;
+-  permissive ueventd;
+   allow kernel unlabeled:file rw_file_perms;
+   allow kernel tmpfs:file { read };
+   allow kernel recovery:fd { use };
+--- a/system/sepolicy/private/lpdumpd.te
++++ b/system/sepolicy/private/lpdumpd.te
+@@ -5,7 +5,9 @@
+ 
+ # Allow lpdumpd to register itself as a service.
+ binder_use(lpdumpd)
+-add_service(lpdumpd, lpdump_service)
++# [X6885] lpdumpd dijalankan di domain recovery (adb shell). Macro add_service memuat
++# neverallow add untuk domain lain, jadi diganti allow tanpa neverallow itu.
++allow lpdumpd lpdump_service:service_manager { add find };
+ 
+ # Allow lpdumpd to find the super partition block device.
+ allow lpdumpd block_device:dir r_dir_perms;
+@@ -36,6 +38,7 @@
+     -dumpstate
+     -lpdumpd
+     -shell
++    recovery_only(`-recovery')
+ } lpdump_service:service_manager find;
+ 
+ neverallow {
